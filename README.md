@@ -11,20 +11,20 @@ An n8n community node that integrates with [DocuWriter.ai](https://www.docuwrite
 
 ### 🔧 Core Capabilities
 
-- **Code Documentation Generation**: Transform source code into comprehensive, structured documentation
-- **Automated Test Creation**: Generate test suites for any programming language
+- **Code Documentation Generation**: Transform source code into comprehensive documentation
+- **Automated Test Creation**: Generate test suites for your code
 - **UML Diagram Generation**: Create visual representations of code architecture
 - **Code Optimization**: Get AI-powered suggestions for improving code quality
-- **Multi-language Support**: Works with all major programming languages
-- **Batch Processing**: Handle multiple files and repositories efficiently
+- **Generation Management**: Access and retrieve previously generated content
+- **User Info**: Check account status and credit balance
+- **Webhook Support**: Real-time triggers when generations are created or updated
 
 ### 📚 Use Cases
 
 - **CI/CD Integration**: Automatically generate documentation on code commits
-- **Quality Assurance**: Create comprehensive test suites for new features
+- **Quality Assurance**: Create test suites for new features
 - **Code Review Automation**: Generate optimization suggestions and architectural diagrams
 - **Documentation Maintenance**: Keep project documentation up-to-date automatically
-- **Developer Onboarding**: Create visual guides and comprehensive documentation for new team members
 
 ## Installation
 
@@ -47,9 +47,6 @@ An n8n community node that integrates with [DocuWriter.ai](https://www.docuwrite
 ```bash
 # Install via npm
 npm install n8n-nodes-docuwriter-ai
-
-# Or install via pnpm
-pnpm install n8n-nodes-docuwriter-ai
 ```
 
 ## Configuration
@@ -74,7 +71,7 @@ pnpm install n8n-nodes-docuwriter-ai
 
 ## Usage
 
-The DocuWriter.ai integration provides two main components:
+The DocuWriter.ai integration provides two main node types:
 
 ## Action Node
 
@@ -98,8 +95,8 @@ Generate automated test suites.
 **Parameters:**
 - `sourceCode` (required): The source code to test
 - `filename` (required): Filename for context
-- `testFramework`: Testing framework to use
-- `testType`: Type of tests (unit, integration, etc.)
+- `testFramework`: Testing framework to use (auto-detect available)
+- `testType`: Type of tests (unit tests, etc.)
 - `coverageLevel`: Coverage level (basic/comprehensive/full)
 
 #### UML Diagram
@@ -108,7 +105,7 @@ Create visual diagrams from code structure.
 **Parameters:**
 - `sourceCode` (required): The source code to analyze
 - `filename` (required): Filename for context
-- `diagramType` (required): Type of UML diagram (class, sequence, use_case, etc.)
+- `diagramType` (required): Type of UML diagram (class, sequence, use_case, activity, component, state, object)
 
 #### Code Optimization
 Get AI-powered code improvement suggestions.
@@ -116,13 +113,13 @@ Get AI-powered code improvement suggestions.
 **Parameters:**
 - `sourceCode` (required): The source code to optimize
 - `filename` (required): Filename for context
-- `optimizationFocus`: Focus area (all, performance, readability, etc.)
+- `optimizationFocus`: Focus area (all, performance, readability, maintainability, security)
 
 #### Generations
 Retrieve previously generated content.
 
 **Operations:**
-- `Get All`: List all generations with optional filtering
+- `Get All`: List all generations with optional filtering by type and limit
 - `Get`: Retrieve a specific generation by ID
 
 #### User Info
@@ -130,23 +127,17 @@ Get account information and remaining credits.
 
 ## Trigger Node
 
-The DocuWriter.ai Trigger node allows you to create workflows that respond to events in DocuWriter.ai in real-time.
+The DocuWriter.ai Trigger node allows you to create workflows that respond to events in DocuWriter.ai.
 
 ### Supported Events
 
 - **Generation Created**: Triggers when a new generation is created
 - **Generation Updated**: Triggers when a generation is updated
 
-### Configuration Options
+### Event Filtering
 
-#### Event Filtering
-- **Filter by Generation Type**: Filter events by specific generation types (Documentation, Tests, Code Comments, etc.)
-
-#### Webhook Security
-Each webhook subscription includes:
-- **Signature Verification**: All webhooks are signed with HMAC-SHA256
-- **Event Validation**: Ensures events match your subscription filters
-- **Automatic Retries**: Failed webhook deliveries are automatically retried
+- **Filter by Generation Type**: Optionally filter events by specific generation types
+- **Generation Types**: Choose from available types including Documentation, Tests, Optimizer, Converter, Swagger API Docs, Comment, Diagrams, and Git-based generations
 
 ### Webhook Payload Structure
 
@@ -154,14 +145,12 @@ Each webhook subscription includes:
 {
   "event": "generation.created",
   "timestamp": "2024-01-15T10:30:00Z",
-  "webhook_id": 123,
   "data": {
-    "id": 456,
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "filename": "example.js",
-    "generation_type": "Documentation",
+    "generation_type": "[Basic] => Documentation",
     "generated_by_user": "user@example.com",
-    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-15T10:30:00Z",
     "tag": "project-alpha"
   }
 }
@@ -181,7 +170,7 @@ Each webhook subscription includes:
 }
 ```
 
-### Generate Tests with Custom Framework
+### Generate Tests
 
 ```json
 {
@@ -189,7 +178,7 @@ Each webhook subscription includes:
   "operation": "generate",
   "sourceCode": "class User {\n  constructor(name) {\n    this.name = name;\n  }\n}",
   "filename": "User.js",
-  "testFramework": "Jest",
+  "testFramework": "auto-detect",
   "coverageLevel": "comprehensive"
 }
 ```
@@ -206,60 +195,12 @@ Each webhook subscription includes:
 }
 ```
 
-## Workflow Templates
+## Workflow Examples
 
-We provide pre-built workflow templates for common use cases:
+We provide example workflows in the `/examples/workflows/` directory:
 
-### 1. Documentation on Git Commit
-
-Automatically generate documentation when code is committed to your repository.
-
-**Triggers:** GitHub/GitLab webhook
-**Actions:** 
-- Fetch changed files
-- Generate documentation
-- Commit documentation back to repository
-- Notify team via Slack
-
-[View Template](./examples/workflows/code-documentation-on-commit.json)
-
-### 2. Automated Code Quality Check
-
-Comprehensive code analysis including tests, optimization, and UML diagrams.
-
-**Triggers:** File upload
-**Actions:**
-- Generate test suites
-- Optimize code
-- Create UML diagrams
-- Generate quality report
-- Send alerts for low-quality code
-
-[View Template](./examples/workflows/automated-testing-workflow.json)
-
-### 3. Real-time Generation Processing
-
-Automatically process new generations as they're created in DocuWriter.ai.
-
-**Triggers:** DocuWriter.ai webhook (generation.created)
-**Actions:**
-- Fetch generation details
-- Save documentation to Google Drive
-- Generate and commit tests to GitHub
-- Notify team via Slack
-
-[View Template](./examples/workflows/generation-created-webhook.json)
-
-### 4. CI/CD Integration
-
-Integrate with your CI/CD pipeline for automated documentation and testing.
-
-**Triggers:** Build completion
-**Actions:**
-- Analyze changed files
-- Generate comprehensive documentation
-- Create test cases
-- Update project wiki
+- **[Automated Testing Workflow](./examples/workflows/automated-testing-workflow.json)**: Generate tests, optimize code, and create UML diagrams
+- **[Generation Created Webhook](./examples/workflows/generation-created-webhook.json)**: Process new generations in real-time
 
 ## API Reference
 
@@ -271,111 +212,35 @@ All DocuWriter.ai API responses follow this format:
 {
   "success": true,
   "data": {
-    "generation_id": "12345",
-    "filename": "example.js",
-    "documentation": "# Generated Documentation\n...",
-    "created_at": "2024-01-15T10:30:00Z"
+    // Generated content and metadata
   }
 }
 ```
 
 ### Error Handling
 
-When an error occurs, the response will include:
-
-```json
-{
-  "success": false,
-  "message": "Error description",
-  "error": "Detailed error information"
-}
-```
-
-Common error scenarios:
-- **403**: Insufficient credits
-- **413**: Code too long
-- **422**: Validation errors
-- **500**: Server errors
-
-## Best Practices
-
-### 1. Code Size Optimization
-
-- Keep individual files under 100KB for optimal processing
-- Use the "Faster" mode for quick iterations
-- Split large files into smaller components when possible
-
-### 2. Credit Management
-
-- Monitor your credit usage via the User Info resource
-- Use batch processing for multiple files
-- Choose appropriate generation modes based on needs
-
-### 3. Error Handling
-
-```javascript
-// Example error handling in n8n Code node
-try {
-  const result = $node["DocuWriter.ai"].json;
-  if (!result.success) {
-    throw new Error(result.message);
-  }
-  return result.data;
-} catch (error) {
-  return { error: error.message, retry: true };
-}
-```
-
-### 4. Workflow Optimization
-
-- Use conditional logic to skip unnecessary generations
-- Cache results when processing similar files
-- Implement retry mechanisms for transient failures
-
-## Rate Limits
-
-DocuWriter.ai implements the following rate limits:
-
-- **Free Tier**: 10 requests per minute
-- **Starter Plan**: 60 requests per minute  
-- **Pro Plan**: 300 requests per minute
-- **Enterprise**: Custom limits
+When an error occurs, the response will include error information. The node supports n8n's built-in error handling and will return execution data even on failures when "Continue on Fail" is enabled.
 
 ## Troubleshooting
 
 ### Common Issues
 
 #### Authentication Failed
-```
-Error: Request failed with status code 401
-```
-**Solution**: Verify your API token in the credentials configuration.
+**Solution**: Verify your API token in the credentials configuration and ensure it's valid.
 
 #### Code Too Large
-```
-Error: The code is too long. Please shorten it.
-```
-**Solution**: Split large files or use the "Faster" mode which has higher limits.
-
-#### Rate Limit Exceeded
-```
-Error: Too Many Requests
-```
-**Solution**: Implement delays between requests or upgrade your DocuWriter.ai plan.
+**Solution**: Break down large files into smaller components or use the "Faster" mode.
 
 #### No Credits Remaining
-```
-Error: You have no remaining credits. Please upgrade your plan.
-```
-**Solution**: Check your account status and upgrade your DocuWriter.ai subscription.
+**Solution**: Check your account status and upgrade your DocuWriter.ai subscription if needed.
 
 ### Debug Mode
 
 Enable debug logging in n8n to troubleshoot issues:
 
-1. Set environment variable: `N8N_LOG_LEVEL=debug`
-2. Check n8n logs for detailed error information
-3. Verify request/response data in the execution logs
+1. Check n8n execution logs for detailed error information
+2. Verify request/response data in the execution history
+3. Test credentials using the built-in test functionality
 
 ## Support
 
@@ -390,13 +255,12 @@ Enable debug logging in n8n to troubleshoot issues:
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please feel free to submit issues and pull requests.
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests
-5. Submit a pull request
+4. Submit a pull request
 
 ## License
 
@@ -404,12 +268,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### v1.0.1
+- Fixed repository URL to point to correct GitHub organization
+
 ### v1.0.0
 - Initial release
 - Core documentation generation
 - Test suite creation
 - UML diagram generation
 - Code optimization features
+- Generation management
+- User info retrieval
+- Webhook trigger support
 - Complete n8n integration
 
 ---
