@@ -268,6 +268,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### v1.0.2
+- Updated documentation to reflect actual implemented features
+- Removed unimplemented workflow examples
+- Cleaned up README to accurately describe available functionality
+
 ### v1.0.1
 - Fixed repository URL to point to correct GitHub organization
 
