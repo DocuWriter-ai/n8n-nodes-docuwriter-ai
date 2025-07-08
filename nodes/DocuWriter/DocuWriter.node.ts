@@ -6,6 +6,8 @@ import type {
 	IDataObject,
 } from 'n8n-workflow';
 
+import { NodeConnectionType } from 'n8n-workflow';
+
 import { NodeOperationError } from 'n8n-workflow';
 
 export class DocuWriter implements INodeType {
@@ -20,8 +22,8 @@ export class DocuWriter implements INodeType {
 		defaults: {
 			name: 'DocuWriter.ai',
 		},
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: [NodeConnectionType.Main],
+		outputs: [NodeConnectionType.Main],
 		credentials: [
 			{
 				name: 'docuWriterApi',
@@ -466,7 +468,7 @@ export class DocuWriter implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const returnData: IDataObject[] = [];
+		const returnData: INodeExecutionData[] = [];
 
 		const resource = this.getNodeParameter('resource', 0);
 		const operation = this.getNodeParameter('operation', 0);
@@ -623,7 +625,7 @@ export class DocuWriter implements INodeType {
 			} catch (error) {
 				if (this.continueOnFail()) {
 					const executionErrorData = this.helpers.constructExecutionMetaData(
-						this.helpers.returnJsonArray({ error: error.message }),
+						this.helpers.returnJsonArray({ error: (error as Error).message }),
 						{ itemData: { item: i } },
 					);
 					returnData.push(...executionErrorData);

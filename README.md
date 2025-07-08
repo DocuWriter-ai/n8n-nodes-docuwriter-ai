@@ -74,7 +74,11 @@ pnpm install n8n-nodes-docuwriter-ai
 
 ## Usage
 
-The DocuWriter.ai node provides multiple resources and operations:
+The DocuWriter.ai integration provides two main components:
+
+## Action Node
+
+The DocuWriter.ai action node provides multiple resources and operations for generating content:
 
 ### Resources
 
@@ -123,6 +127,45 @@ Retrieve previously generated content.
 
 #### User Info
 Get account information and remaining credits.
+
+## Trigger Node
+
+The DocuWriter.ai Trigger node allows you to create workflows that respond to events in DocuWriter.ai in real-time.
+
+### Supported Events
+
+- **Generation Created**: Triggers when a new generation is created
+- **Generation Updated**: Triggers when a generation is updated
+
+### Configuration Options
+
+#### Event Filtering
+- **Filter by Generation Type**: Filter events by specific generation types (Documentation, Tests, Code Comments, etc.)
+
+#### Webhook Security
+Each webhook subscription includes:
+- **Signature Verification**: All webhooks are signed with HMAC-SHA256
+- **Event Validation**: Ensures events match your subscription filters
+- **Automatic Retries**: Failed webhook deliveries are automatically retried
+
+### Webhook Payload Structure
+
+```json
+{
+  "event": "generation.created",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "webhook_id": 123,
+  "data": {
+    "id": 456,
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "filename": "example.js",
+    "generation_type": "Documentation",
+    "generated_by_user": "user@example.com",
+    "created_at": "2024-01-15T10:30:00Z",
+    "tag": "project-alpha"
+  }
+}
+```
 
 ## Examples
 
@@ -194,7 +237,20 @@ Comprehensive code analysis including tests, optimization, and UML diagrams.
 
 [View Template](./examples/workflows/automated-testing-workflow.json)
 
-### 3. CI/CD Integration
+### 3. Real-time Generation Processing
+
+Automatically process new generations as they're created in DocuWriter.ai.
+
+**Triggers:** DocuWriter.ai webhook (generation.created)
+**Actions:**
+- Fetch generation details
+- Save documentation to Google Drive
+- Generate and commit tests to GitHub
+- Notify team via Slack
+
+[View Template](./examples/workflows/generation-created-webhook.json)
+
+### 4. CI/CD Integration
 
 Integrate with your CI/CD pipeline for automated documentation and testing.
 

@@ -30,11 +30,11 @@
   "packageManager": "pnpm@7.18.0",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && gulp build:icons",
+    "build": "tsc",
     "dev": "tsc --watch",
     "format": "prettier nodes credentials --write",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
+    "lint": "eslint \"nodes/**/*.ts\" \"credentials/**/*.ts\" package.json",
+    "lintfix": "eslint \"nodes/**/*.ts\" \"credentials/**/*.ts\" package.json --fix",
     "prepublishOnly": "npm run build && npm run lint -s"
   },
   "files": [
@@ -47,7 +47,6 @@
     ],
     "nodes": [
       "dist/nodes/DocuWriter/DocuWriter.node.js",
-      "dist/nodes/DocuWriterCodeTools/DocuWriterCodeTools.node.js",
       "dist/nodes/DocuWriterTrigger/DocuWriterTrigger.node.js"
     ]
   },
@@ -55,7 +54,6 @@
     "@typescript-eslint/parser": "^5.45.0",
     "eslint": "^8.29.0",
     "eslint-plugin-n8n-nodes-base": "^1.11.0",
-    "gulp": "^4.0.2",
     "n8n-workflow": "*",
     "prettier": "^2.7.1",
     "typescript": "^4.9.4"
