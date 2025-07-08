@@ -83,24 +83,52 @@ export class DocuWriterTrigger implements INodeType {
 				},
 				options: [
 					{
-						name: 'Documentation',
-						value: 'Documentation',
+						name: '[Basic] => Documentation',
+						value: '[Basic] => Documentation',
 					},
 					{
-						name: 'Tests',
-						value: 'Tests',
+						name: '[Basic] => Tests',
+						value: '[Basic] => Tests',
 					},
 					{
-						name: 'Code Comments',
-						value: 'Code Comments',
+						name: '[Basic] => Optimizer',
+						value: '[Basic] => Optimizer',
 					},
 					{
-						name: 'Code Optimization',
-						value: 'Code Optimization',
+						name: '[Basic] => Converter',
+						value: '[Basic] => Converter',
 					},
 					{
-						name: 'UML Diagram',
-						value: 'UML Diagram',
+						name: '[Basic] => Swagger API Docs',
+						value: '[Basic] => Swagger API Docs',
+					},
+					{
+						name: '[Basic] => Comment',
+						value: '[Basic] => Comment',
+					},
+					{
+						name: '[Basic] => Diagrams',
+						value: '[Basic] => Diagrams',
+					},
+					{
+						name: '[Git] => Documentation',
+						value: '[Git] => Documentation',
+					},
+					{
+						name: '[Git] => Readme',
+						value: '[Git] => Readme',
+					},
+					{
+						name: '[Git] => Full Tree Documentation',
+						value: '[Git] => Full Tree Documentation',
+					},
+					{
+						name: '[Git] => Release Notes',
+						value: '[Git] => Release Notes',
+					},
+					{
+						name: '[Git] => Codebase',
+						value: '[Git] => Codebase',
 					},
 				],
 				default: [],
@@ -113,7 +141,11 @@ export class DocuWriterTrigger implements INodeType {
 		const bodyData = this.getBodyData() as IDataObject;
 		const event = this.getNodeParameter('event') as string;
 		const filterByGenerationType = this.getNodeParameter('filterByGenerationType') as boolean;
-		const generationTypes = this.getNodeParameter('generationTypes') as string[];
+		
+		// Only get generationTypes if filtering is enabled
+		const generationTypes = filterByGenerationType 
+			? this.getNodeParameter('generationTypes') as string[]
+			: [];
 
 		// Validate the webhook payload
 		if (!bodyData.event || !bodyData.data) {
@@ -150,14 +182,44 @@ export class DocuWriterTrigger implements INodeType {
 			}
 		}
 
+		// Prepare the generation data
+		const generationData = bodyData.data as IDataObject;
+		
+		// Map generation type numbers to names (from GenerationType enum)
+		const generationTypeMap: Record<string, string> = {
+			'0': '[Basic] => Documentation',
+			'1': '[Basic] => Tests',
+			'2': '[Basic] => Optimizer',
+			'3': '[Basic] => Converter',
+			'5': '[Basic] => Swagger API Docs',
+			'6': '[Basic] => Comment',
+			'7': '[Basic] => Diagrams',
+			'8': '[Git] => Documentation',
+			'9': '[Git] => Readme',
+			'10': '[Git] => Full Tree Documentation',
+			'11': '[Git] => Release Notes',
+			'12': '[Git] => Codebase',
+		};
+		
+		// Get the generation type name
+		const generationTypeName = generationData.generation_type 
+			? generationTypeMap[generationData.generation_type.toString()] || 'Unknown'
+			: 'Unknown';
+
 		// Return the webhook data to be processed by the workflow
 		const returnData: INodeExecutionData[] = [
 			{
 				json: {
 					event: bodyData.event,
 					timestamp: bodyData.timestamp || new Date().toISOString(),
-					data: bodyData.data,
-					webhook_id: bodyData.webhook_id,
+					data: {
+						uuid: generationData.uuid,
+						filename: generationData.filename,
+						generation_type: generationTypeName,
+						generated_by_user: generationData.generated_by_user,
+						updated_at: generationData.updated_at,
+						tag: generationData.tag,
+					},
 				},
 			},
 		];
