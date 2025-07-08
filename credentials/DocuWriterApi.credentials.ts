@@ -26,8 +26,7 @@ export class DocuWriterApi implements ICredentialType {
 			displayName: 'Base URL',
 			name: 'baseUrl',
 			type: 'string',
-			//default: 'https://app.docuwriter.ai',
-			default: 'https://docs-ai.test',
+			default: 'https://app.docuwriter.ai',
 			description: 'Base URL for DocuWriter.ai API',
 		},
 	];
