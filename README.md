@@ -1,6 +1,6 @@
 # n8n-nodes-docuwriter-ai
 
-![DocuWriter.ai Logo](https://app.docuwriter.ai/logo.png)
+![DocuWriter.ai Logo](https://www.docuwriter.ai/assets/logo-horizontal.png)
 
 An n8n community node that integrates with [DocuWriter.ai](https://www.docuwriter.ai) - the AI-powered platform for automated code documentation, testing, and optimization.
 
@@ -68,6 +68,82 @@ npm install n8n-nodes-docuwriter-ai
    - **API Token**: Your DocuWriter.ai API token
    - **Base URL**: `https://app.docuwriter.ai` (default)
 5. Click **Save**
+
+## How It Works
+
+The DocuWriter.ai n8n integration provides seamless automation for code documentation, testing, and optimization:
+
+### Integration Architecture
+
+```mermaid
+graph TB
+    subgraph "n8n Workflow"
+        TN[Trigger Nodes]
+        AN[Action Nodes]
+        ON[Other n8n Nodes]
+    end
+    
+    subgraph "DocuWriter.ai Platform"
+        API[DocuWriter API]
+        AI[AI Processing Engine]
+        DB[(User Data & Generations)]
+    end
+    
+    subgraph "External Systems"
+        GH[GitHub/GitLab]
+        GD[Google Drive]
+        SL[Slack/Discord]
+        EM[Email Services]
+    end
+    
+    TN -->|Webhook Events| AN
+    AN -->|API Requests| API
+    API --> AI
+    AI --> DB
+    API -->|Generated Content| AN
+    AN --> ON
+    ON --> GH
+    ON --> GD
+    ON --> SL
+    ON --> EM
+```
+
+### Action Node Workflow
+
+```mermaid
+sequenceDiagram
+    participant W as n8n Workflow
+    participant DN as DocuWriter Node
+    participant API as DocuWriter API
+    participant AI as AI Engine
+    
+    W->>DN: Source Code + Parameters
+    DN->>API: POST /n8n/code-documentation
+    Note over API: Authenticate with Bearer Token
+    API->>AI: Process Code
+    AI->>AI: Generate Documentation/Tests/UML
+    AI-->>API: Generated Content
+    API-->>DN: Response with Generated Data
+    DN-->>W: Formatted Output for Next Node
+```
+
+### Trigger Node Workflow
+
+```mermaid
+sequenceDiagram
+    participant DW as DocuWriter.ai
+    participant WH as Webhook System
+    participant TN as Trigger Node
+    participant W as n8n Workflow
+    
+    Note over DW: User generates documentation
+    DW->>WH: generation.created event
+    WH->>TN: POST webhook with payload
+    TN->>TN: Filter by event type
+    TN->>TN: Process generation data
+    TN-->>W: Trigger workflow execution
+    W->>W: Process generation content
+```
 
 ## Usage
 
@@ -197,7 +273,48 @@ The DocuWriter.ai Trigger node allows you to create workflows that respond to ev
 
 ## Workflow Examples
 
-We provide example workflows in the `/examples/workflows/` directory:
+### Example: Automated Code Quality Pipeline
+
+```mermaid
+graph LR
+    FU[File Upload Trigger] --> RF[Read File]
+    RF --> DOC[Generate Documentation]
+    RF --> TEST[Generate Tests]
+    RF --> UML[Generate UML]
+    RF --> OPT[Optimize Code]
+    
+    DOC --> REP[Create Quality Report]
+    TEST --> REP
+    UML --> REP
+    OPT --> REP
+    
+    REP --> SAVE[Save Report]
+    REP --> CHECK{Quality Score > 70?}
+    
+    CHECK -->|Yes| SLACK[✅ Success Notification]
+    CHECK -->|No| EMAIL[⚠️ Quality Alert]
+    
+    SAVE --> GITHUB[Commit to Repository]
+```
+
+### Example: Real-time Generation Processing
+
+```mermaid
+graph LR
+    DW[DocuWriter.ai] -->|generation.created| WH[Webhook Trigger]
+    WH --> FILTER{Filter Event Type}
+    
+    FILTER -->|Documentation| DOCS[Fetch Generation]
+    FILTER -->|Tests| TESTS[Generate Additional Tests]
+    
+    DOCS --> GD[Save to Google Drive]
+    TESTS --> GH[Commit to GitHub]
+    
+    GD --> NOTIFY[Slack Notification]
+    GH --> NOTIFY
+```
+
+We provide complete example workflows in the `/examples/workflows/` directory:
 
 - **[Automated Testing Workflow](./examples/workflows/automated-testing-workflow.json)**: Generate tests, optimize code, and create UML diagrams
 - **[Generation Created Webhook](./examples/workflows/generation-created-webhook.json)**: Process new generations in real-time
@@ -245,12 +362,10 @@ Enable debug logging in n8n to troubleshoot issues:
 ## Support
 
 ### Documentation
-- [DocuWriter.ai Documentation](https://docs.docuwriter.ai)
 - [n8n Community Forum](https://community.n8n.io)
 
 ### Contact
 - **Email**: support@docuwriter.ai
-- **Discord**: [Join our community](https://discord.gg/docuwriter)
 - **GitHub Issues**: [Report bugs](https://github.com/DocuWriter-ai/n8n-nodes-docuwriter-ai/issues)
 
 ## Contributing
