@@ -383,6 +383,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### v1.0.8
+- Fixed "Invalid URL" error by properly constructing full API URLs
+- Improved error handling and URL validation
+- Removed unnecessary requestDefaults configuration
+
 ### v1.0.7
 - Fixed icons not displaying in n8n interface
 - Updated build process to correctly copy SVG icon files to dist directory

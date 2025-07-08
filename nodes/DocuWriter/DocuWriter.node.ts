@@ -30,13 +30,6 @@ export class DocuWriter implements INodeType {
 				required: true,
 			},
 		],
-		requestDefaults: {
-			baseURL: '={{$credentials.baseUrl}}/api',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-			},
-		},
 		properties: [
 			{
 				displayName: 'Resource',
@@ -473,6 +466,10 @@ export class DocuWriter implements INodeType {
 		const resource = this.getNodeParameter('resource', 0);
 		const operation = this.getNodeParameter('operation', 0);
 
+		// Get credentials to construct base URL
+		const credentials = await this.getCredentials('docuWriterApi');
+		const baseUrl = credentials.baseUrl as string;
+
 		for (let i = 0; i < items.length; i++) {
 			try {
 				let responseData: IDataObject | IDataObject[] = {};
@@ -490,7 +487,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'POST',
-								url: '/n8n/code-documentation',
+								url: `${baseUrl}/api/n8n/code-documentation`,
 								body: {
 									source_code: sourceCode,
 									filename,
@@ -515,7 +512,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'POST',
-								url: '/n8n/code-tests',
+								url: `${baseUrl}/api/n8n/code-tests`,
 								body: {
 									source_code: sourceCode,
 									filename,
@@ -538,7 +535,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'POST',
-								url: '/n8n/uml-diagram',
+								url: `${baseUrl}/api/n8n/uml-diagram`,
 								body: {
 									source_code: sourceCode,
 									filename,
@@ -559,7 +556,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'POST',
-								url: '/n8n/optimize-code',
+								url: `${baseUrl}/api/n8n/optimize-code`,
 								body: {
 									source_code: sourceCode,
 									filename,
@@ -584,7 +581,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'GET',
-								url: '/n8n/generations',
+								url: `${baseUrl}/api/n8n/generations`,
 								qs,
 								json: true,
 							},
@@ -597,7 +594,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'GET',
-								url: `/n8n/generation/${generationId}`,
+								url: `${baseUrl}/api/n8n/generation/${generationId}`,
 								json: true,
 							},
 						);
@@ -609,7 +606,7 @@ export class DocuWriter implements INodeType {
 							'docuWriterApi',
 							{
 								method: 'GET',
-								url: '/n8n/user-info',
+								url: `${baseUrl}/api/n8n/user-info`,
 								json: true,
 							},
 						);
