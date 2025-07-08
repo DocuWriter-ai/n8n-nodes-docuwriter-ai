@@ -383,6 +383,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### v1.0.7
+- Fixed icons not displaying in n8n interface
+- Updated build process to correctly copy SVG icon files to dist directory
+- Added cross-platform copyfiles dependency for better build compatibility
+
 ### v1.0.2
 - Updated documentation to reflect actual implemented features
 - Removed unimplemented workflow examples

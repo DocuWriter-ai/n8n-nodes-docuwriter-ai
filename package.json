@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-docuwriter-ai",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "n8n node for DocuWriter.ai - AI-powered code documentation and development tools",
   "keywords": [
     "n8n-community-node-package",
@@ -30,7 +30,8 @@
   "packageManager": "pnpm@7.18.0",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy:icons",
+    "copy:icons": "copyfiles \"nodes/**/*.svg\" dist",
     "dev": "tsc --watch",
     "format": "prettier nodes credentials --write",
     "lint": "eslint \"nodes/**/*.ts\" \"credentials/**/*.ts\"",
@@ -53,6 +54,7 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "copyfiles": "^2.4.1",
     "eslint": "^8.29.0",
     "eslint-plugin-n8n-nodes-base": "^1.11.0",
     "n8n-workflow": "*",
