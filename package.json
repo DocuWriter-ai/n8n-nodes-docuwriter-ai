@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/docuwriter/n8n-nodes-docuwriter-ai.git"
+    "url": "git+https://github.com/DocuWriter-ai/n8n-nodes-docuwriter-ai.git"
   },
   "engines": {
     "node": ">=18.10",

@@ -386,7 +386,7 @@ Enable debug logging in n8n to troubleshoot issues:
 ### Contact
 - **Email**: support@docuwriter.ai
 - **Discord**: [Join our community](https://discord.gg/docuwriter)
-- **GitHub Issues**: [Report bugs](https://github.com/docuwriter/n8n-nodes-docuwriter-ai/issues)
+- **GitHub Issues**: [Report bugs](https://github.com/DocuWriter-ai/n8n-nodes-docuwriter-ai/issues)
 
 ## Contributing
 
