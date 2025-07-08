@@ -1,0 +1,66 @@
+{
+  "name": "n8n-nodes-docuwriter-ai",
+  "version": "1.0.0",
+  "description": "n8n node for DocuWriter.ai - AI-powered code documentation and development tools",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "docuwriter",
+    "documentation",
+    "ai",
+    "code",
+    "testing",
+    "uml",
+    "automation"
+  ],
+  "license": "MIT",
+  "homepage": "https://www.docuwriter.ai",
+  "author": {
+    "name": "DocuWriter.ai Team",
+    "email": "support@docuwriter.ai"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/docuwriter/n8n-nodes-docuwriter-ai.git"
+  },
+  "engines": {
+    "node": ">=18.10",
+    "pnpm": ">=7.18"
+  },
+  "packageManager": "pnpm@7.18.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes credentials --write",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "prepublishOnly": "npm run build && npm run lint -s"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/DocuWriterApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/DocuWriter/DocuWriter.node.js",
+      "dist/nodes/DocuWriterCodeTools/DocuWriterCodeTools.node.js",
+      "dist/nodes/DocuWriterTrigger/DocuWriterTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.29.0",
+    "eslint-plugin-n8n-nodes-base": "^1.11.0",
+    "gulp": "^4.0.2",
+    "n8n-workflow": "*",
+    "prettier": "^2.7.1",
+    "typescript": "^4.9.4"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}

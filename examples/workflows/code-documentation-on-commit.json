@@ -1,0 +1,211 @@
+{
+  "name": "Generate Documentation on Git Commit",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "push"
+        ],
+        "repository": "owner/repo-name"
+      },
+      "id": "webhook-trigger",
+      "name": "GitHub Webhook",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.ref}}",
+              "operation": "equal",
+              "value2": "refs/heads/main"
+            }
+          ]
+        }
+      },
+      "id": "filter-main-branch",
+      "name": "Filter Main Branch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "file",
+        "operation": "get",
+        "owner": "={{$json.repository.owner.login}}",
+        "repository": "={{$json.repository.name}}",
+        "filePath": "={{$json.head_commit.modified[0] || $json.head_commit.added[0]}}"
+      },
+      "id": "get-file-content",
+      "name": "Get File Content",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "codeDocumentation",
+        "operation": "generate",
+        "sourceCode": "={{$json.content}}",
+        "filename": "={{$json.name}}",
+        "mode": "Accurate",
+        "outputLanguage": "English",
+        "documentationType": "Technical Documentation"
+      },
+      "id": "generate-documentation",
+      "name": "Generate Documentation",
+      "type": "n8n-nodes-docuwriter-ai.docuWriter",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "docuWriterApi": {
+          "id": "1",
+          "name": "DocuWriter.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "file",
+        "operation": "create",
+        "owner": "={{$node['GitHub Webhook'].json['repository']['owner']['login']}}",
+        "repository": "={{$node['GitHub Webhook'].json['repository']['name']}}",
+        "filePath": "docs/{{$node['Get File Content'].json['name']}}.md",
+        "fileContent": "={{$json.data.documentation}}",
+        "commitMessage": "Auto-generated documentation for {{$node['Get File Content'].json['name']}}"
+      },
+      "id": "save-documentation",
+      "name": "Save Documentation",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#dev-team",
+        "text": "📚 Documentation generated for {{$node['Get File Content'].json['name']}} in {{$node['GitHub Webhook'].json['repository']['name']}}",
+        "attachments": [
+          {
+            "color": "good",
+            "title": "DocuWriter.ai Generated Documentation",
+            "text": "{{$node['Generate Documentation'].json['data']['documentation'].substring(0, 200)}}...",
+            "fields": [
+              {
+                "title": "File",
+                "value": "{{$node['Get File Content'].json['name']}}",
+                "short": true
+              },
+              {
+                "title": "Repository",
+                "value": "{{$node['GitHub Webhook'].json['repository']['name']}}",
+                "short": true
+              }
+            ]
+          }
+        ]
+      },
+      "id": "notify-team",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "GitHub Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter Main Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Main Branch": {
+      "main": [
+        [
+          {
+            "node": "Get File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Content": {
+      "main": [
+        [
+          {
+            "node": "Generate Documentation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Documentation": {
+      "main": [
+        [
+          {
+            "node": "Save Documentation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "tags": [
+    {
+      "id": "docuwriter",
+      "name": "DocuWriter.ai"
+    },
+    {
+      "id": "documentation",
+      "name": "Documentation"
+    },
+    {
+      "id": "automation",
+      "name": "Automation"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -1,0 +1,336 @@
+{
+  "name": "Automated Code Testing and Quality Check",
+  "nodes": [
+    {
+      "parameters": {
+        "filePath": "/tmp/uploaded-files",
+        "fileExtensions": "js,ts,py,php,java"
+      },
+      "id": "file-trigger",
+      "name": "File Upload Trigger",
+      "type": "n8n-nodes-base.localFileTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "readBinaryFile",
+        "inputBinaryField": "data"
+      },
+      "id": "read-file",
+      "name": "Read File Content",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract filename and content from binary data\nconst fileName = $input.first().binary.data.fileName;\nconst content = Buffer.from($input.first().binary.data.data, 'base64').toString('utf-8');\n\nreturn {\n  filename: fileName,\n  source_code: content,\n  file_extension: fileName.split('.').pop()\n};"
+      },
+      "id": "process-file",
+      "name": "Process File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "codeTests",
+        "operation": "generate",
+        "sourceCode": "={{$json.source_code}}",
+        "filename": "={{$json.filename}}",
+        "testFramework": "auto-detect",
+        "testType": "unit tests",
+        "coverageLevel": "comprehensive"
+      },
+      "id": "generate-tests",
+      "name": "Generate Tests",
+      "type": "n8n-nodes-docuwriter-ai.docuWriter",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "docuWriterApi": {
+          "id": "1",
+          "name": "DocuWriter.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "codeOptimization",
+        "operation": "optimize",
+        "sourceCode": "={{$node['Process File'].json['source_code']}}",
+        "filename": "={{$node['Process File'].json['filename']}}",
+        "optimizationFocus": "all"
+      },
+      "id": "optimize-code",
+      "name": "Optimize Code",
+      "type": "n8n-nodes-docuwriter-ai.docuWriter",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "docuWriterApi": {
+          "id": "1",
+          "name": "DocuWriter.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "umlDiagram",
+        "operation": "generate",
+        "sourceCode": "={{$node['Process File'].json['source_code']}}",
+        "filename": "={{$node['Process File'].json['filename']}}",
+        "diagramType": "class"
+      },
+      "id": "generate-uml",
+      "name": "Generate UML",
+      "type": "n8n-nodes-docuwriter-ai.docuWriter",
+      "typeVersion": 1,
+      "position": [
+        900,
+        600
+      ],
+      "credentials": {
+        "docuWriterApi": {
+          "id": "1",
+          "name": "DocuWriter.ai API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all results into a comprehensive report\nconst originalFile = $node['Process File'].json;\nconst tests = $node['Generate Tests'].json;\nconst optimization = $node['Optimize Code'].json;\nconst uml = $node['Generate UML'].json;\n\nconst report = {\n  file_analysis: {\n    filename: originalFile.filename,\n    extension: originalFile.file_extension,\n    processed_at: new Date().toISOString()\n  },\n  test_generation: {\n    success: tests.success,\n    test_framework: tests.data?.test_framework,\n    coverage_level: tests.data?.coverage_level,\n    tests_content: tests.data?.tests\n  },\n  code_optimization: {\n    success: optimization.success,\n    optimization_focus: optimization.data?.optimization_focus,\n    optimized_code: optimization.data?.optimized_code,\n    changes_summary: optimization.data?.changes_summary\n  },\n  uml_diagram: {\n    success: uml.success,\n    diagram_type: uml.data?.diagram_type,\n    diagram_content: uml.data?.diagram\n  },\n  quality_score: calculateQualityScore(tests.success, optimization.success, uml.success)\n};\n\nfunction calculateQualityScore(testsSuccess, optimizationSuccess, umlSuccess) {\n  let score = 0;\n  if (testsSuccess) score += 40;\n  if (optimizationSuccess) score += 35;\n  if (umlSuccess) score += 25;\n  return score;\n}\n\nreturn report;"
+      },
+      "id": "create-report",
+      "name": "Create Quality Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "createBinaryData": true,
+        "fileName": "quality-report-{{$node['Process File'].json['filename']}}.json",
+        "data": "={{JSON.stringify($json, null, 2)}}",
+        "mimeType": "application/json"
+      },
+      "id": "save-report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "appendRow",
+        "documentId": "YOUR_SPREADSHEET_ID",
+        "sheetName": "Code Quality Reports",
+        "columnNames": "Filename,Quality Score,Tests Generated,Code Optimized,UML Created,Processed Date",
+        "values": "={{$node['Create Quality Report'].json['file_analysis']['filename']}},={{$node['Create Quality Report'].json['quality_score']}},={{$node['Create Quality Report'].json['test_generation']['success']}},={{$node['Create Quality Report'].json['code_optimization']['success']}},={{$node['Create Quality Report'].json['uml_diagram']['success']}},={{$node['Create Quality Report'].json['file_analysis']['processed_at']}}"
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$node['Create Quality Report'].json['quality_score']}}",
+              "operation": "smaller",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "check-quality-threshold",
+      "name": "Quality Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "⚠️ Code Quality Alert",
+        "toEmail": "dev-team@company.com",
+        "text": "Quality analysis for {{$node['Create Quality Report'].json['file_analysis']['filename']}} shows a low quality score of {{$node['Create Quality Report'].json['quality_score']}}%.\n\nRecommended actions:\n- Review generated test cases\n- Apply suggested code optimizations\n- Consider architectural improvements based on UML diagram\n\nDetailed report attached.",
+        "attachments": "quality-report-{{$node['Process File'].json['filename']}}.json"
+      },
+      "id": "send-alert",
+      "name": "Send Quality Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "File Upload Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read File Content": {
+      "main": [
+        [
+          {
+            "node": "Process File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File": {
+      "main": [
+        [
+          {
+            "node": "Generate Tests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Optimize Code",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate UML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Tests": {
+      "main": [
+        [
+          {
+            "node": "Create Quality Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optimize Code": {
+      "main": [
+        [
+          {
+            "node": "Create Quality Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate UML": {
+      "main": [
+        [
+          {
+            "node": "Create Quality Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Quality Report": {
+      "main": [
+        [
+          {
+            "node": "Save Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Quality Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Check": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send Quality Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "tags": [
+    {
+      "id": "docuwriter",
+      "name": "DocuWriter.ai"
+    },
+    {
+      "id": "testing",
+      "name": "Testing"
+    },
+    {
+      "id": "quality",
+      "name": "Quality Assurance"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
