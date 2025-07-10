@@ -1,0 +1,475 @@
+{
+    "name": "GitLab MR Documentation & Analysis",
+    "nodes": [
+        {
+            "parameters": {
+                "events": [
+                    "merge_requests"
+                ],
+                "authentication": "accessToken"
+            },
+            "id": "gitlab-mr-trigger",
+            "name": "GitLab MR Trigger",
+            "type": "n8n-nodes-base.gitlabTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "gitlab-mr-webhook",
+            "credentials": {
+                "gitlabApi": {
+                    "id": "1",
+                    "name": "GitLab API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{$json.object_attributes.action}}",
+                            "operation": "equal",
+                            "value2": "open"
+                        }
+                    ]
+                }
+            },
+            "id": "filter-mr-opened",
+            "name": "Filter MR Opened",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "accessToken",
+                "resource": "mergeRequest",
+                "operation": "getCommits",
+                "projectId": "={{$json.project.id}}",
+                "mergeRequestIid": "={{$json.object_attributes.iid}}"
+            },
+            "id": "get-mr-commits",
+            "name": "Get MR Commits",
+            "type": "n8n-nodes-base.gitlab",
+            "typeVersion": 1,
+            "position": [
+                680,
+                200
+            ],
+            "credentials": {
+                "gitlabApi": {
+                    "id": "1",
+                    "name": "GitLab API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "authentication": "accessToken",
+                "resource": "mergeRequest",
+                "operation": "getChanges",
+                "projectId": "={{$node['GitLab MR Trigger'].json['project']['id']}}",
+                "mergeRequestIid": "={{$node['GitLab MR Trigger'].json['object_attributes']['iid']}}"
+            },
+            "id": "get-mr-changes",
+            "name": "Get MR Changes",
+            "type": "n8n-nodes-base.gitlab",
+            "typeVersion": 1,
+            "position": [
+                680,
+                400
+            ],
+            "credentials": {
+                "gitlabApi": {
+                    "id": "1",
+                    "name": "GitLab API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Process changed files and filter for code files\nconst changes = items[0].json.changes;\nconst codeExtensions = ['.js', '.ts', '.py', '.php', '.java', '.cpp', '.cs', '.rb', '.go', '.rs', '.vue', '.jsx', '.tsx'];\n\nconst processedFiles = changes\n  .filter(change => {\n    if (!change.new_path) return false;\n    const extension = change.new_path.substring(change.new_path.lastIndexOf('.'));\n    return codeExtensions.includes(extension) && \n           !change.new_path.includes('node_modules') && \n           !change.new_path.includes('.git') && \n           !change.deleted_file;\n  })\n  .map(change => ({\n    json: {\n      filePath: change.new_path,\n      diff: change.diff,\n      newFile: change.new_file,\n      oldPath: change.old_path,\n      projectId: $node['GitLab MR Trigger'].json.project.id\n    }\n  }));\n\nreturn processedFiles.slice(0, 5); // Limit to 5 files"
+            },
+            "id": "process-changed-files",
+            "name": "Process Changed Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                900,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "accessToken",
+                "resource": "repository",
+                "operation": "getFile",
+                "projectId": "={{$json.projectId}}",
+                "filePath": "={{$json.filePath}}",
+                "reference": "={{$node['GitLab MR Trigger'].json['object_attributes']['source_branch']}}"
+            },
+            "id": "get-file-content",
+            "name": "Get File Content",
+            "type": "n8n-nodes-base.gitlab",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                400
+            ],
+            "credentials": {
+                "gitlabApi": {
+                    "id": "1",
+                    "name": "GitLab API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Decode and prepare source code\nconst fileData = items[0].json;\nconst changeData = $node['Process Changed Files'].json;\n\n// Decode base64 content\nconst content = Buffer.from(fileData.content, 'base64').toString('utf-8');\n\nreturn [{\n  json: {\n    sourceCode: content,\n    filename: fileData.file_name,\n    filePath: changeData.filePath,\n    isNewFile: changeData.newFile,\n    diff: changeData.diff\n  }\n}];"
+            },
+            "id": "prepare-file-data",
+            "name": "Prepare File Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "codeDocumentation",
+                "operation": "generate",
+                "sourceCode": "={{$json.sourceCode}}",
+                "filename": "={{$json.filename}}",
+                "mode": "Accurate",
+                "outputLanguage": "English",
+                "documentationType": "Technical Documentation"
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                300
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "codeTests",
+                "operation": "generate",
+                "sourceCode": "={{$node['Prepare File Data'].json['sourceCode']}}",
+                "filename": "={{$node['Prepare File Data'].json['filename']}}",
+                "testFramework": "auto-detect",
+                "testType": "unit tests",
+                "coverageLevel": "comprehensive"
+            },
+            "id": "generate-tests",
+            "name": "Generate Tests",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                500
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "codeOptimization",
+                "operation": "optimize",
+                "sourceCode": "={{$node['Prepare File Data'].json['sourceCode']}}",
+                "filename": "={{$node['Prepare File Data'].json['filename']}}",
+                "optimizationFocus": "all"
+            },
+            "id": "generate-optimization",
+            "name": "Generate Optimization",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                700
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Combine all analysis results\nconst fileData = $node['Prepare File Data'].json;\nconst documentation = items.find(item => item.json.resource === 'codeDocumentation')?.json || {};\nconst tests = items.find(item => item.json.resource === 'codeTests')?.json || {};\nconst optimization = items.find(item => item.json.resource === 'codeOptimization')?.json || {};\n\nconst analysisReport = `## 📄 Code Analysis Report for \\`${fileData.filename}\\`\n\n### 📚 Documentation\n${documentation.data?.generated || 'Documentation generation failed'}\n\n### 🧪 Suggested Tests\n\\`\\`\\`${fileData.filename.split('.').pop()}\n${tests.data?.tests || 'Test generation failed'}\n\\`\\`\\`\n\n### ⚡ Optimization Suggestions\n${optimization.data?.optimized_code || 'No optimization suggestions available'}\n\n### 📊 Summary\n- **File**: ${fileData.filePath}\n- **Type**: ${fileData.isNewFile ? 'New file' : 'Modified file'}\n- **Analysis**: Complete\n\n---\n*Generated automatically by DocuWriter.ai*`;\n\nreturn [{\n  json: {\n    report: analysisReport,\n    filename: fileData.filename,\n    filePath: fileData.filePath,\n    projectId: $node['GitLab MR Trigger'].json.project.id,\n    mrIid: $node['GitLab MR Trigger'].json.object_attributes.iid\n  }\n}];"
+            },
+            "id": "combine-analysis",
+            "name": "Combine Analysis",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "accessToken",
+                "resource": "mergeRequest",
+                "operation": "createNote",
+                "projectId": "={{$json.projectId}}",
+                "mergeRequestIid": "={{$json.mrIid}}",
+                "body": "={{$json.report}}"
+            },
+            "id": "post-mr-comment",
+            "name": "Post MR Comment",
+            "type": "n8n-nodes-base.gitlab",
+            "typeVersion": 1,
+            "position": [
+                2000,
+                500
+            ],
+            "credentials": {
+                "gitlabApi": {
+                    "id": "1",
+                    "name": "GitLab API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "channel": "#code-reviews",
+                "text": "🔍 Code analysis complete for GitLab MR",
+                "attachments": [
+                    {
+                        "color": "good",
+                        "title": "{{$node['GitLab MR Trigger'].json['object_attributes']['title']}}",
+                        "text": "Automated code analysis has been completed for the merge request.",
+                        "fields": [
+                            {
+                                "title": "Author",
+                                "value": "{{$node['GitLab MR Trigger'].json['user']['name']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Project",
+                                "value": "{{$node['GitLab MR Trigger'].json['project']['name']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Source Branch",
+                                "value": "{{$node['GitLab MR Trigger'].json['object_attributes']['source_branch']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Target Branch",
+                                "value": "{{$node['GitLab MR Trigger'].json['object_attributes']['target_branch']}}",
+                                "short": true
+                            }
+                        ],
+                        "actions": [
+                            {
+                                "type": "button",
+                                "text": "View MR",
+                                "url": "{{$node['GitLab MR Trigger'].json['object_attributes']['url']}}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "id": "notify-team",
+            "name": "Notify Team",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 1,
+            "position": [
+                2220,
+                500
+            ],
+            "credentials": {
+                "slackApi": {
+                    "id": "1",
+                    "name": "Slack API"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "GitLab MR Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Filter MR Opened",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter MR Opened": {
+            "main": [
+                [
+                    {
+                        "node": "Get MR Commits",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get MR Changes",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get MR Changes": {
+            "main": [
+                [
+                    {
+                        "node": "Process Changed Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Changed Files": {
+            "main": [
+                [
+                    {
+                        "node": "Get File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare File Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare File Data": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate Tests",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate Optimization",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Combine Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Tests": {
+            "main": [
+                [
+                    {
+                        "node": "Combine Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Optimization": {
+            "main": [
+                [
+                    {
+                        "node": "Combine Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Combine Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Post MR Comment",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Post MR Comment": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Team",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": {},
+    "tags": [
+        {
+            "id": "docuwriter",
+            "name": "DocuWriter.ai"
+        },
+        {
+            "id": "gitlab",
+            "name": "GitLab"
+        },
+        {
+            "id": "merge-request",
+            "name": "Merge Request"
+        },
+        {
+            "id": "code-review",
+            "name": "Code Review"
+        }
+    ],
+    "meta": {
+        "templateCredsSetupCompleted": false
+    }
+}

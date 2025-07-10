@@ -1,0 +1,575 @@
+{
+    "name": "Dropbox File Monitor & Documentation",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "minutes",
+                            "minutesInterval": 15
+                        }
+                    ]
+                }
+            },
+            "id": "file-monitor-schedule",
+            "name": "File Monitor Schedule (15min)",
+            "type": "n8n-nodes-base.cron",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "folder",
+                "operation": "search",
+                "query": "*",
+                "additionalFields": {
+                    "path": "/Code-to-Document",
+                    "mode": "filename"
+                }
+            },
+            "id": "scan-dropbox-folder",
+            "name": "Scan Dropbox Code Folder",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter for code files and check if they're new (modified in last 15 minutes)\nconst files = $json.matches || [];\nconst codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.scala', '.kt', '.swift', '.vue', '.svelte', '.html', '.css'];\n\nconst now = new Date();\nconst fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);\n\nconst newCodeFiles = files.filter(item => {\n  const metadata = item.metadata.metadata;\n  const fileName = metadata.name;\n  const modifiedTime = new Date(metadata.client_modified);\n  \n  // Check if it's a code file\n  const extension = '.' + fileName.split('.').pop().toLowerCase();\n  if (!codeExtensions.includes(extension)) return false;\n  \n  // Check if it's been modified in the last 15 minutes\n  return modifiedTime > fifteenMinutesAgo;\n});\n\nreturn newCodeFiles.map(item => {\n  const metadata = item.metadata.metadata;\n  return {\n    json: {\n      fileName: metadata.name,\n      filePath: metadata.path_lower,\n      fileId: metadata.id,\n      size: metadata.size,\n      modifiedTime: metadata.client_modified,\n      extension: '.' + metadata.name.split('.').pop().toLowerCase(),\n      language: metadata.name.split('.').pop().toLowerCase()\n    }\n  };\n});"
+            },
+            "id": "filter-new-code-files",
+            "name": "Filter New Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "download",
+                "path": "={{ $json.filePath }}"
+            },
+            "id": "download-file-content",
+            "name": "Download File Content",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Prepare file content for DocuWriter.ai\nconst sourceCode = $json.data || $json.body;\nconst fileInfo = $('Filter New Code Files').first().json;\n\nreturn {\n  json: {\n    sourceCode: sourceCode,\n    fileName: fileInfo.fileName,\n    filePath: fileInfo.filePath,\n    language: fileInfo.language,\n    fileSize: fileInfo.size,\n    modifiedTime: fileInfo.modifiedTime,\n    extension: fileInfo.extension\n  }\n};"
+            },
+            "id": "prepare-source-code",
+            "name": "Prepare Source Code",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Documentation",
+                "mode": "accurate",
+                "additionalInstructions": "Generate comprehensive documentation for this {{ $json.language }} file ({{ $json.fileName }}) uploaded to Dropbox. Include: 1) Clear overview of purpose and functionality, 2) Key features and capabilities, 3) Code structure and organization, 4) Dependencies and requirements, 5) Usage examples and code snippets, 6) Configuration and setup instructions, 7) Best practices and recommendations. Format for easy reading and team collaboration."
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Code Comments",
+                "mode": "fast",
+                "additionalInstructions": "Add comprehensive inline comments to this {{ $json.language }} code ({{ $json.fileName }}). Focus on explaining complex logic, function purposes, parameter descriptions, and return values. Make the code more maintainable for team collaboration."
+            },
+            "id": "generate-comments",
+            "name": "Generate Code Comments",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "UML Diagrams",
+                "mode": "fast",
+                "additionalInstructions": "Create UML diagrams for {{ $json.fileName }} to visualize the code structure, relationships, and data flow. Include class diagrams, sequence diagrams, or flowcharts as appropriate for this {{ $json.language }} code."
+            },
+            "id": "generate-diagrams",
+            "name": "Generate UML Diagrams",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                540
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate All Results",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                1560,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create organized documentation files for Dropbox\nconst items = $input.all();\nconst fileInfo = items[0].json;\n\nlet documentation = '';\nlet commentedCode = '';\nlet diagrams = '';\n\n// Separate content by generation type\nfor (const item of items) {\n  if (item.json.generatedContent) {\n    if (item.json.generatedContent.includes('mermaid') || item.json.generatedContent.includes('UML')) {\n      diagrams = item.json.generatedContent;\n    } else if (item.json.generatedContent.includes('//') || item.json.generatedContent.includes('/*')) {\n      commentedCode = item.json.generatedContent;\n    } else {\n      documentation = item.json.generatedContent;\n    }\n  }\n}\n\n// Create comprehensive documentation file\nconst markdownDoc = `# Documentation for ${fileInfo.fileName}\n\n**File Path:** ${fileInfo.filePath}  \n**Language:** ${fileInfo.language}  \n**File Size:** ${fileInfo.fileSize} bytes  \n**Last Modified:** ${fileInfo.modifiedTime}  \n**Generated:** ${new Date().toISOString()}\n\n---\n\n## 📖 Documentation\n\n${documentation}\n\n---\n\n## 📊 Architecture Diagrams\n\n${diagrams}\n\n---\n\n## 💻 Commented Code\n\n\\`\\`\\`${fileInfo.language}\n${commentedCode}\n\\`\\`\\`\n\n---\n\n*Generated automatically by DocuWriter.ai*`;\n\n// Create summary for folder index\nconst summary = {\n  fileName: fileInfo.fileName,\n  filePath: fileInfo.filePath,\n  language: fileInfo.language,\n  documentationGenerated: new Date().toISOString(),\n  sections: {\n    hasDocumentation: documentation.length > 0,\n    hasDiagrams: diagrams.length > 0,\n    hasCommentedCode: commentedCode.length > 0\n  }\n};\n\nreturn {\n  json: {\n    fileInfo: fileInfo,\n    markdownContent: markdownDoc,\n    commentedCode: commentedCode,\n    summary: summary,\n    documentationFileName: `${fileInfo.fileName.split('.')[0]}_documentation.md`,\n    commentedCodeFileName: `${fileInfo.fileName.split('.')[0]}_commented.${fileInfo.language}`\n  }\n};"
+            },
+            "id": "create-documentation-files",
+            "name": "Create Documentation Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "upload",
+                "path": "/Documented-Code/{{ $json.documentationFileName }}",
+                "fileContent": "={{ $json.markdownContent }}",
+                "additionalFields": {
+                    "mode": "overwrite"
+                }
+            },
+            "id": "upload-documentation",
+            "name": "Upload Documentation to Dropbox",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "upload",
+                "path": "/Documented-Code/Commented/{{ $json.commentedCodeFileName }}",
+                "fileContent": "={{ $json.commentedCode }}",
+                "additionalFields": {
+                    "mode": "overwrite"
+                }
+            },
+            "id": "upload-commented-code",
+            "name": "Upload Commented Code",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                440
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "get",
+                "path": "/Documented-Code/documentation-index.json",
+                "additionalFields": {}
+            },
+            "id": "get-existing-index",
+            "name": "Get Existing Index",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                2220,
+                360
+            ],
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "// Update the documentation index with new entries\nconst newSummary = $('Create Documentation Files').first().json.summary;\nlet existingIndex = [];\n\n// Try to parse existing index\ntry {\n  const indexData = $input.first().json;\n  if (indexData && indexData.data) {\n    existingIndex = JSON.parse(indexData.data);\n  }\n} catch (error) {\n  // Start with empty index if file doesn't exist or is invalid\n  existingIndex = [];\n}\n\n// Remove any existing entry for this file\nexistingIndex = existingIndex.filter(item => item.fileName !== newSummary.fileName);\n\n// Add the new entry\nexistingIndex.push(newSummary);\n\n// Sort by generation date (newest first)\nexistingIndex.sort((a, b) => new Date(b.documentationGenerated) - new Date(a.documentationGenerated));\n\nconst updatedIndex = {\n  lastUpdated: new Date().toISOString(),\n  totalFiles: existingIndex.length,\n  files: existingIndex\n};\n\nreturn {\n  json: {\n    indexContent: JSON.stringify(updatedIndex, null, 2),\n    summary: newSummary\n  }\n};"
+            },
+            "id": "update-index",
+            "name": "Update Documentation Index",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2440,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "upload",
+                "path": "/Documented-Code/documentation-index.json",
+                "fileContent": "={{ $json.indexContent }}",
+                "additionalFields": {
+                    "mode": "overwrite"
+                }
+            },
+            "id": "upload-updated-index",
+            "name": "Upload Updated Index",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                2660,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "createSharedLink",
+                "path": "/Documented-Code/{{ $('Create Documentation Files').first().json.documentationFileName }}",
+                "additionalFields": {
+                    "settings": {
+                        "requested_visibility": "public"
+                    }
+                }
+            },
+            "id": "create-shared-link",
+            "name": "Create Shared Documentation Link",
+            "type": "n8n-nodes-base.dropbox",
+            "typeVersion": 2,
+            "position": [
+                2880,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "#development",
+                "text": "📁 Dropbox Code Documentation Generated",
+                "attachments": [
+                    {
+                        "color": "#0061ff",
+                        "title": "New File Documented - {{ $('Create Documentation Files').first().json.fileInfo.fileName }}",
+                        "title_link": "{{ $json.url }}",
+                        "text": "DocuWriter.ai has automatically processed and documented your uploaded code file",
+                        "fields": [
+                            {
+                                "title": "File",
+                                "value": "{{ $('Create Documentation Files').first().json.fileInfo.fileName }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Language",
+                                "value": "{{ $('Create Documentation Files').first().json.fileInfo.language }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Size",
+                                "value": "{{ $('Create Documentation Files').first().json.fileInfo.fileSize }} bytes",
+                                "short": true
+                            },
+                            {
+                                "title": "Generated Content",
+                                "value": "• Documentation\\n• Commented Code\\n• UML Diagrams",
+                                "short": true
+                            }
+                        ],
+                        "footer": "DocuWriter.ai",
+                        "ts": "{{ Math.floor(Date.now() / 1000) }}"
+                    }
+                ]
+            },
+            "id": "notify-team",
+            "name": "Notify Team via Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                3100,
+                360
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "dev-team@company.com",
+                "subject": "📁 New Code Documentation Available - {{ $('Create Documentation Files').first().json.fileInfo.fileName }}",
+                "text": "Hello Development Team,\n\nDocuWriter.ai has automatically processed a new code file uploaded to your Dropbox.\n\n📋 File Details:\n- File: {{ $('Create Documentation Files').first().json.fileInfo.fileName }}\n- Language: {{ $('Create Documentation Files').first().json.fileInfo.language }}\n- Size: {{ $('Create Documentation Files').first().json.fileInfo.fileSize }} bytes\n- Upload Time: {{ $('Create Documentation Files').first().json.fileInfo.modifiedTime }}\n\n📚 Generated Documentation:\n- Comprehensive code documentation\n- Inline code comments for better maintainability\n- UML diagrams and architecture visualization\n\n🔗 Access Documentation:\n{{ $('Create Shared Documentation Link').first().json.url }}\n\n📁 All documented files are organized in:\n/Documented-Code/ folder in your Dropbox\n\nThe documentation is ready for review and can be shared with your team.\n\nBest regards,\nDocuWriter.ai Automation"
+            },
+            "id": "send-email-notification",
+            "name": "Send Email Notification",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                3320,
+                360
+            ]
+        }
+    ],
+    "connections": {
+        "File Monitor Schedule (15min)": {
+            "main": [
+                [
+                    {
+                        "node": "Scan Dropbox Code Folder",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Scan Dropbox Code Folder": {
+            "main": [
+                [
+                    {
+                        "node": "Filter New Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter New Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Download File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Source Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Source Code": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate Code Comments",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate UML Diagrams",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate All Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Code Comments": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate All Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate UML Diagrams": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate All Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate All Results": {
+            "main": [
+                [
+                    {
+                        "node": "Create Documentation Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Documentation Files": {
+            "main": [
+                [
+                    {
+                        "node": "Upload Documentation to Dropbox",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Upload Commented Code",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get Existing Index",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upload Documentation to Dropbox": {
+            "main": [
+                [
+                    {
+                        "node": "Update Documentation Index",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upload Commented Code": {
+            "main": [
+                [
+                    {
+                        "node": "Update Documentation Index",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Existing Index": {
+            "main": [
+                [
+                    {
+                        "node": "Update Documentation Index",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Documentation Index": {
+            "main": [
+                [
+                    {
+                        "node": "Upload Updated Index",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upload Updated Index": {
+            "main": [
+                [
+                    {
+                        "node": "Create Shared Documentation Link",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Shared Documentation Link": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Team via Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notify Team via Slack": {
+            "main": [
+                [
+                    {
+                        "node": "Send Email Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "dropbox-integration",
+            "name": "dropbox-integration"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "file-monitoring",
+            "name": "file-monitoring"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "cloud-storage",
+            "name": "cloud-storage"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-15T10:00:00.000Z",
+    "versionId": "1"
+}

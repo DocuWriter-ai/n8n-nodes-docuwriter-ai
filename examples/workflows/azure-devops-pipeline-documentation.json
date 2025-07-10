@@ -1,0 +1,605 @@
+{
+    "name": "Azure DevOps Pipeline Documentation & Analysis",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "azure-devops-webhook",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "azure-webhook-trigger",
+            "name": "Azure DevOps Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "azure-devops-webhook"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "push-condition",
+                            "leftValue": "={{ $json.eventType }}",
+                            "rightValue": "git.push",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        },
+                        {
+                            "id": "main-branch-condition",
+                            "leftValue": "={{ $json.resource.refUpdates[0].name }}",
+                            "rightValue": "refs/heads/main",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "filter-main-push",
+            "name": "Filter: Main Branch Push",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract organization, project, and repository info from webhook\nconst resource = $json.resource;\nconst repository = resource.repository;\nconst commits = resource.commits || [];\n\nconst orgInfo = {\n  organization: repository.remoteUrl.match(/https:\\/\\/dev\\.azure\\.com\\/(.*?)\\//)[1],\n  project: repository.project.name,\n  repositoryId: repository.id,\n  repositoryName: repository.name,\n  commits: commits.map(commit => ({\n    commitId: commit.commitId,\n    comment: commit.comment,\n    author: commit.author.name\n  }))\n};\n\nreturn { json: orgInfo };"
+            },
+            "id": "extract-repo-info",
+            "name": "Extract Repository Info",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "getRepositoryContent",
+                "organization": "={{ $json.organization }}",
+                "project": "={{ $json.project }}",
+                "repositoryId": "={{ $json.repositoryId }}",
+                "path": "/",
+                "additionalFields": {
+                    "recursionLevel": "full",
+                    "includeContentMetadata": true
+                }
+            },
+            "id": "list-repository-files",
+            "name": "List Repository Files",
+            "type": "n8n-nodes-base.azureDevOps",
+            "typeVersion": 1,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter for code files and prepare for content retrieval\nconst items = $json.value || [];\nconst codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.scala', '.kt', '.swift', '.vue', '.svelte'];\n\nconst codeFiles = items.filter(item => {\n  if (item.gitObjectType !== 'blob') return false;\n  const extension = '.' + item.path.split('.').pop().toLowerCase();\n  return codeExtensions.includes(extension);\n}).slice(0, 10); // Limit to 10 files for performance\n\nconst repoInfo = $('Extract Repository Info').first().json;\n\nreturn codeFiles.map(file => ({\n  json: {\n    ...repoInfo,\n    filePath: file.path,\n    fileName: file.path.split('/').pop(),\n    extension: '.' + file.path.split('.').pop().toLowerCase(),\n    objectId: file.objectId\n  }\n}));"
+            },
+            "id": "filter-code-files",
+            "name": "Filter Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "getRepositoryContent",
+                "organization": "={{ $json.organization }}",
+                "project": "={{ $json.project }}",
+                "repositoryId": "={{ $json.repositoryId }}",
+                "path": "={{ $json.filePath }}",
+                "additionalFields": {
+                    "download": true
+                }
+            },
+            "id": "get-file-content",
+            "name": "Get File Content",
+            "type": "n8n-nodes-base.azureDevOps",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Prepare source code for DocuWriter.ai\nconst fileContent = $json.content || $json.body;\nconst commits = $json.commits || [];\nconst latestCommit = commits[0] || {};\n\nreturn {\n  json: {\n    sourceCode: fileContent,\n    fileName: $json.fileName,\n    filePath: $json.filePath,\n    language: $json.extension.replace('.', ''),\n    repository: {\n      organization: $json.organization,\n      project: $json.project,\n      name: $json.repositoryName,\n      latestCommit: latestCommit\n    }\n  }\n};"
+            },
+            "id": "prepare-source-code",
+            "name": "Prepare Source Code",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Documentation",
+                "mode": "accurate",
+                "additionalInstructions": "This is code from Azure DevOps repository {{ $json.repository.organization }}/{{ $json.repository.project }}/{{ $json.repository.name }}. Provide comprehensive documentation including: 1) Purpose and functionality, 2) Dependencies and integrations, 3) Configuration requirements, 4) Usage examples, 5) Potential improvements for Azure DevOps pipeline integration."
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "UML Diagrams",
+                "mode": "fast",
+                "additionalInstructions": "Create UML diagrams for this code from {{ $json.repository.organization }}/{{ $json.repository.project }}/{{ $json.repository.name }}. Focus on architecture and component relationships that would be valuable for Azure DevOps pipeline planning and deployment strategies."
+            },
+            "id": "generate-diagrams",
+            "name": "Generate UML Diagrams",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Tests",
+                "mode": "fast",
+                "additionalInstructions": "Generate test strategies and suggestions for this code in Azure DevOps context. Include unit tests, integration tests, and pipeline testing recommendations."
+            },
+            "id": "generate-tests",
+            "name": "Generate Test Strategies",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                540
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate Results",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                2000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create comprehensive documentation report\nconst items = $input.all();\nconst repoInfo = items[0].json.repository;\nconst latestCommit = repoInfo.latestCommit;\n\nlet documentation = '';\nlet diagrams = '';\nlet testStrategies = '';\n\n// Separate results by type\nfor (const item of items) {\n  if (item.json.generatedContent && item.json.fileName) {\n    if (item.json.generatedContent.includes('mermaid') || item.json.generatedContent.includes('UML')) {\n      diagrams += `\\n### Diagrams for \\`${item.json.fileName}\\`\\n\\n${item.json.generatedContent}\\n\\n---\\n`;\n    } else if (item.json.generatedContent.includes('test') || item.json.generatedContent.includes('Test')) {\n      testStrategies += `\\n### Test Strategy for \\`${item.json.fileName}\\`\\n\\n${item.json.generatedContent}\\n\\n---\\n`;\n    } else {\n      documentation += `\\n### Documentation for \\`${item.json.fileName}\\`\\n\\n${item.json.generatedContent}\\n\\n---\\n`;\n    }\n  }\n}\n\n// Create Azure DevOps work item content\nconst workItemContent = `# 📚 Repository Documentation Update\n\n**Generated by DocuWriter.ai for Azure DevOps**\n\n## 📖 Code Documentation\n${documentation}\n\n## 📊 Architecture Diagrams\n${diagrams}\n\n## 🧪 Testing Strategies\n${testStrategies}\n\n## 📋 Repository Summary\n- **Organization**: ${repoInfo.organization}\n- **Project**: ${repoInfo.project}\n- **Repository**: ${repoInfo.name}\n- **Files Analyzed**: ${items.length} code files\n- **Latest Commit**: ${latestCommit.comment || 'N/A'}\n- **Author**: ${latestCommit.author || 'N/A'}\n\n---\n*Documentation generated on ${new Date().toISOString().split('T')[0]}*`;\n\nreturn {\n  json: {\n    workItemContent: workItemContent,\n    repository: repoInfo,\n    filesAnalyzed: items.length,\n    documentation: documentation,\n    diagrams: diagrams,\n    testStrategies: testStrategies\n  }\n};"
+            },
+            "id": "format-documentation",
+            "name": "Format Documentation",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "workItem",
+                "operation": "createWorkItem",
+                "organization": "={{ $json.repository.organization }}",
+                "project": "={{ $json.repository.project }}",
+                "type": "User Story",
+                "title": "📚 Documentation Update - {{ $json.repository.name }} ({{ new Date().toISOString().split('T')[0] }})",
+                "additionalFields": {
+                    "description": "={{ $json.workItemContent }}",
+                    "tags": "documentation;automated;docuwriter-ai"
+                }
+            },
+            "id": "create-work-item",
+            "name": "Create Documentation Work Item",
+            "type": "n8n-nodes-base.azureDevOps",
+            "typeVersion": 1,
+            "position": [
+                2440,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "createCommit",
+                "organization": "={{ $json.repository.organization }}",
+                "project": "={{ $json.repository.project }}",
+                "repositoryId": "={{ $json.repository.name }}",
+                "branchName": "main",
+                "commitMessage": "docs: Auto-generated documentation update by DocuWriter.ai",
+                "changes": [
+                    {
+                        "changeType": "add",
+                        "item": {
+                            "path": "/docs/automated-documentation.md"
+                        },
+                        "newContent": {
+                            "content": "={{ $json.documentation }}",
+                            "contentType": "rawtext"
+                        }
+                    },
+                    {
+                        "changeType": "add",
+                        "item": {
+                            "path": "/docs/architecture-diagrams.md"
+                        },
+                        "newContent": {
+                            "content": "={{ $json.diagrams }}",
+                            "contentType": "rawtext"
+                        }
+                    },
+                    {
+                        "changeType": "add",
+                        "item": {
+                            "path": "/docs/testing-strategies.md"
+                        },
+                        "newContent": {
+                            "content": "={{ $json.testStrategies }}",
+                            "contentType": "rawtext"
+                        }
+                    }
+                ]
+            },
+            "id": "commit-documentation",
+            "name": "Commit Documentation to Repo",
+            "type": "n8n-nodes-base.azureDevOps",
+            "typeVersion": 1,
+            "position": [
+                2660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "#devops",
+                "text": "📚 Azure DevOps Documentation Generated",
+                "attachments": [
+                    {
+                        "color": "#0078d4",
+                        "title": "Repository Documentation Updated - {{ $json.repository.organization }}/{{ $json.repository.project }}/{{ $json.repository.name }}",
+                        "text": "DocuWriter.ai has generated comprehensive documentation for your Azure DevOps repository",
+                        "fields": [
+                            {
+                                "title": "Files Analyzed",
+                                "value": "{{ $json.filesAnalyzed }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Work Item Created",
+                                "value": "User Story with documentation details",
+                                "short": true
+                            },
+                            {
+                                "title": "Documentation Sections",
+                                "value": "• Code Documentation\\n• Architecture Diagrams\\n• Testing Strategies",
+                                "short": false
+                            }
+                        ],
+                        "footer": "DocuWriter.ai",
+                        "ts": "{{ Math.floor(Date.now() / 1000) }}"
+                    }
+                ]
+            },
+            "id": "notify-slack",
+            "name": "Notify Team via Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                2880,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "{{ $json.repository.latestCommit.author }}@company.com",
+                "subject": "📚 Azure DevOps Documentation Generated - {{ $json.repository.name }}",
+                "text": "Hi {{ $json.repository.latestCommit.author }},\n\nDocuWriter.ai has automatically generated comprehensive documentation for your recent changes in {{ $json.repository.organization }}/{{ $json.repository.project }}/{{ $json.repository.name }}.\n\n📋 Generated Content:\n- Code documentation for {{ $json.filesAnalyzed }} files\n- Architecture diagrams and UML\n- Testing strategies and recommendations\n\n🎯 What's Next:\n- Review the created work item in Azure DevOps\n- Check the committed documentation in /docs folder\n- Integrate recommendations into your development pipeline\n\nBest regards,\nDocuWriter.ai Automation"
+            },
+            "id": "send-email-notification",
+            "name": "Send Email Notification",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                3100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"success\", \"message\": \"Documentation generated successfully\", \"workItemId\": $('Create Documentation Work Item').first().json.id, \"filesAnalyzed\": $json.filesAnalyzed } }}"
+            },
+            "id": "webhook-response",
+            "name": "Webhook Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                3320,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"ignored\", \"message\": \"Not a main branch push event\" } }}"
+            },
+            "id": "webhook-response-ignored",
+            "name": "Webhook Response (Ignored)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                460,
+                480
+            ]
+        }
+    ],
+    "connections": {
+        "Azure DevOps Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Filter: Main Branch Push",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter: Main Branch Push": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Repository Info",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Webhook Response (Ignored)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Repository Info": {
+            "main": [
+                [
+                    {
+                        "node": "List Repository Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "List Repository Files": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Get File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Source Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Source Code": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate UML Diagrams",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate Test Strategies",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate UML Diagrams": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Test Strategies": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Results": {
+            "main": [
+                [
+                    {
+                        "node": "Format Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Create Documentation Work Item",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Documentation Work Item": {
+            "main": [
+                [
+                    {
+                        "node": "Commit Documentation to Repo",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Commit Documentation to Repo": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Team via Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notify Team via Slack": {
+            "main": [
+                [
+                    {
+                        "node": "Send Email Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Email Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Webhook Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "azure-devops",
+            "name": "azure-devops"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "documentation-automation",
+            "name": "documentation-automation"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "pipeline-integration",
+            "name": "pipeline-integration"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-15T10:00:00.000Z",
+    "versionId": "1"
+}

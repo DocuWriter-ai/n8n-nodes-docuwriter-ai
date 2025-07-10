@@ -1,0 +1,382 @@
+{
+    "name": "GitHub Auto-Documentation on Push",
+    "nodes": [
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "events": [
+                    "push"
+                ],
+                "repository": "owner/repository-name"
+            },
+            "id": "github-trigger",
+            "name": "GitHub Push Trigger",
+            "type": "n8n-nodes-base.githubTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "github-push-webhook",
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "1",
+                    "name": "GitHub OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{$json.ref}}",
+                            "operation": "equal",
+                            "value2": "refs/heads/main"
+                        }
+                    ]
+                }
+            },
+            "id": "filter-main-branch",
+            "name": "Filter Main Branch",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "list",
+                "owner": "={{$json.repository.owner.login}}",
+                "repository": "={{$json.repository.name}}",
+                "filePath": "",
+                "additionalParameters": {
+                    "recursive": true
+                }
+            },
+            "id": "list-repository-files",
+            "name": "List Repository Files",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                680,
+                200
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "1",
+                    "name": "GitHub OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter for code files that need documentation\nconst files = items[0].json;\nconst codeExtensions = ['.js', '.ts', '.py', '.php', '.java', '.cpp', '.cs', '.rb', '.go', '.rs'];\n\nconst codeFiles = files.filter(file => {\n  if (file.type !== 'file') return false;\n  const extension = file.name.substring(file.name.lastIndexOf('.'));\n  return codeExtensions.includes(extension) && \n         !file.path.includes('node_modules') && \n         !file.path.includes('.git') && \n         !file.path.includes('dist') && \n         !file.path.includes('build');\n}).slice(0, 10); // Limit to 10 files per run\n\nreturn codeFiles.map(file => ({ json: file }));"
+            },
+            "id": "filter-code-files",
+            "name": "Filter Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                900,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "get",
+                "owner": "={{$node['GitHub Push Trigger'].json['repository']['owner']['login']}}",
+                "repository": "={{$node['GitHub Push Trigger'].json['repository']['name']}}",
+                "filePath": "={{$json.path}}"
+            },
+            "id": "get-file-content",
+            "name": "Get File Content",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                200
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "1",
+                    "name": "GitHub OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Decode base64 content and prepare for DocuWriter\nconst fileData = items[0].json;\nconst content = Buffer.from(fileData.content, 'base64').toString('utf-8');\n\nreturn [{\n  json: {\n    sourceCode: content,\n    filename: fileData.name,\n    path: fileData.path,\n    size: fileData.size\n  }\n}];"
+            },
+            "id": "prepare-source-code",
+            "name": "Prepare Source Code",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "codeDocumentation",
+                "operation": "generate",
+                "sourceCode": "={{$json.sourceCode}}",
+                "filename": "={{$json.filename}}",
+                "mode": "Accurate",
+                "outputLanguage": "English",
+                "documentationType": "Technical Documentation"
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                200
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Format documentation for GitHub markdown\nconst docData = items[0].json;\nconst sourceInfo = $node['Prepare Source Code'].json;\n\nconst markdownContent = `# ${sourceInfo.filename} Documentation\n\n> Auto-generated documentation using DocuWriter.ai\n> Last updated: ${new Date().toISOString().split('T')[0]}\n\n${docData.data.generated}\n\n---\n*This documentation was automatically generated from the source code.*`;\n\nreturn [{\n  json: {\n    content: markdownContent,\n    filename: sourceInfo.filename,\n    path: sourceInfo.path,\n    docsPath: `docs/${sourceInfo.path.replace(/\\.[^/.]+$/, '.md')}`\n  }\n}];"
+            },
+            "id": "format-documentation",
+            "name": "Format Documentation",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "file",
+                "operation": "create",
+                "owner": "={{$node['GitHub Push Trigger'].json['repository']['owner']['login']}}",
+                "repository": "={{$node['GitHub Push Trigger'].json['repository']['name']}}",
+                "filePath": "={{$json.docsPath}}",
+                "fileContent": "={{$json.content}}",
+                "commitMessage": "docs: auto-generate documentation for {{$json.filename}}",
+                "additionalParameters": {
+                    "branch": "main"
+                }
+            },
+            "id": "commit-documentation",
+            "name": "Commit Documentation",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                2000,
+                200
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "1",
+                    "name": "GitHub OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "channel": "#dev-team",
+                "text": "📚 Documentation auto-generated for {{$node['Format Documentation'].json['filename']}}",
+                "attachments": [
+                    {
+                        "color": "good",
+                        "title": "{{$node['Format Documentation'].json['filename']}} Documentation",
+                        "text": "New documentation has been automatically generated and committed to the repository.",
+                        "fields": [
+                            {
+                                "title": "File",
+                                "value": "{{$node['Format Documentation'].json['filename']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Documentation Path",
+                                "value": "{{$node['Format Documentation'].json['docsPath']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Repository",
+                                "value": "{{$node['GitHub Push Trigger'].json['repository']['full_name']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Commit",
+                                "value": "{{$node['GitHub Push Trigger'].json['head_commit']['id'].slice(0, 7)}}",
+                                "short": true
+                            }
+                        ],
+                        "actions": [
+                            {
+                                "type": "button",
+                                "text": "View Documentation",
+                                "url": "{{$node['Commit Documentation'].json['html_url']}}"
+                            },
+                            {
+                                "type": "button",
+                                "text": "View Repository",
+                                "url": "{{$node['GitHub Push Trigger'].json['repository']['html_url']}}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "id": "notify-team",
+            "name": "Notify Team",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 1,
+            "position": [
+                2220,
+                200
+            ],
+            "credentials": {
+                "slackApi": {
+                    "id": "1",
+                    "name": "Slack API"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "GitHub Push Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Main Branch",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Main Branch": {
+            "main": [
+                [
+                    {
+                        "node": "List Repository Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "List Repository Files": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Get File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Source Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Source Code": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Format Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Commit Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Commit Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Team",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": {},
+    "tags": [
+        {
+            "id": "docuwriter",
+            "name": "DocuWriter.ai"
+        },
+        {
+            "id": "github",
+            "name": "GitHub"
+        },
+        {
+            "id": "automation",
+            "name": "Automation"
+        },
+        {
+            "id": "documentation",
+            "name": "Documentation"
+        }
+    ],
+    "meta": {
+        "templateCredsSetupCompleted": false
+    }
+}

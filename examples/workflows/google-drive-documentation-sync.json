@@ -1,0 +1,482 @@
+{
+    "name": "Google Drive Documentation Sync",
+    "nodes": [
+        {
+            "parameters": {
+                "event": "file.created",
+                "options": {
+                    "folderId": "YOUR_CODE_FOLDER_ID"
+                }
+            },
+            "id": "google-drive-trigger",
+            "name": "Google Drive File Created",
+            "type": "n8n-nodes-base.googleDriveTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "google-drive-webhook",
+            "credentials": {
+                "googleDriveOAuth2Api": {
+                    "id": "1",
+                    "name": "Google Drive OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter for code files\nconst file = items[0].json;\nconst codeExtensions = ['.js', '.ts', '.py', '.php', '.java', '.cpp', '.cs', '.rb', '.go', '.rs', '.vue', '.jsx', '.tsx', '.swift', '.kt'];\n\nconst fileName = file.name || '';\nconst extension = fileName.substring(fileName.lastIndexOf('.'));\n\nif (codeExtensions.includes(extension)) {\n  return [{\n    json: {\n      ...file,\n      isCodeFile: true,\n      extension: extension\n    }\n  }];\n} else {\n  return []; // Skip non-code files\n}"
+            },
+            "id": "filter-code-files",
+            "name": "Filter Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "serviceAccount",
+                "resource": "file",
+                "operation": "download",
+                "fileId": "={{$json.id}}"
+            },
+            "id": "download-file",
+            "name": "Download File",
+            "type": "n8n-nodes-base.googleDrive",
+            "typeVersion": 3,
+            "position": [
+                680,
+                300
+            ],
+            "credentials": {
+                "googleDriveOAuth2Api": {
+                    "id": "1",
+                    "name": "Google Drive OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Convert binary data to string\nconst binaryData = items[0].binary.data;\nconst fileData = $node['Filter Code Files'].json;\n\n// Convert buffer to string\nconst sourceCode = binaryData.data ? \n  Buffer.from(binaryData.data, 'base64').toString('utf-8') : \n  '';\n\nreturn [{\n  json: {\n    sourceCode: sourceCode,\n    filename: fileData.name,\n    fileId: fileData.id,\n    extension: fileData.extension,\n    mimeType: fileData.mimeType,\n    size: sourceCode.length\n  }\n}];"
+            },
+            "id": "prepare-source-code",
+            "name": "Prepare Source Code",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "codeDocumentation",
+                "operation": "generate",
+                "sourceCode": "={{$json.sourceCode}}",
+                "filename": "={{$json.filename}}",
+                "mode": "Accurate",
+                "outputLanguage": "English",
+                "documentationType": "Technical Documentation"
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                200
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "umlDiagram",
+                "operation": "generate",
+                "sourceCode": "={{$node['Prepare Source Code'].json['sourceCode']}}",
+                "filename": "={{$node['Prepare Source Code'].json['filename']}}",
+                "diagramType": "class"
+            },
+            "id": "generate-uml",
+            "name": "Generate UML",
+            "type": "n8n-nodes-docuwriter-ai.docuWriter",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                400
+            ],
+            "credentials": {
+                "docuWriterApi": {
+                    "id": "1",
+                    "name": "DocuWriter.ai API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Format documentation as Google Docs HTML\nconst sourceData = $node['Prepare Source Code'].json;\nconst docData = items.find(item => item.json.resource === 'codeDocumentation')?.json || {};\nconst umlData = items.find(item => item.json.resource === 'umlDiagram')?.json || {};\n\nconst timestamp = new Date().toISOString().split('T')[0];\n\nconst documentContent = `\n<h1>${sourceData.filename} - Documentation</h1>\n\n<p><strong>Generated:</strong> ${timestamp}</p>\n<p><strong>File Size:</strong> ${sourceData.size} characters</p>\n<p><strong>Language:</strong> ${sourceData.extension.replace('.', '').toUpperCase()}</p>\n\n<hr>\n\n<h2>📄 Documentation</h2>\n<div style=\"white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;\">\n${docData.data?.generated?.replace(/\\n/g, '<br>') || 'Documentation generation failed'}\n</div>\n\n${umlData.data?.diagram ? `\n<h2>🎯 UML Diagram</h2>\n<div style=\"background: #f9f9f9; padding: 15px; border-radius: 5px;\">\n<pre><code>${umlData.data.diagram}</code></pre>\n</div>\n` : ''}\n\n<hr>\n<p><em>This documentation was automatically generated by DocuWriter.ai</em></p>\n`;\n\nreturn [{\n  json: {\n    documentContent: documentContent,\n    filename: sourceData.filename,\n    fileId: sourceData.fileId,\n    docTitle: `${sourceData.filename} - Documentation`,\n    timestamp: timestamp\n  }\n}];"
+            },
+            "id": "format-documentation",
+            "name": "Format Documentation",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "serviceAccount",
+                "resource": "folder",
+                "operation": "create",
+                "name": "Documentation - {{$json.timestamp}}",
+                "options": {
+                    "parentId": "YOUR_DOCS_PARENT_FOLDER_ID"
+                }
+            },
+            "id": "create-docs-folder",
+            "name": "Create Docs Folder",
+            "type": "n8n-nodes-base.googleDrive",
+            "typeVersion": 3,
+            "position": [
+                1560,
+                200
+            ],
+            "credentials": {
+                "googleDriveOAuth2Api": {
+                    "id": "1",
+                    "name": "Google Drive OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "authentication": "serviceAccount",
+                "resource": "document",
+                "operation": "create",
+                "title": "={{$node['Format Documentation'].json['docTitle']}}",
+                "options": {
+                    "folderId": "={{$json.id}}",
+                    "bodyContentType": "text/html"
+                },
+                "bodyData": "={{$node['Format Documentation'].json['documentContent']}}"
+            },
+            "id": "create-google-doc",
+            "name": "Create Google Doc",
+            "type": "n8n-nodes-base.googleDrive",
+            "typeVersion": 3,
+            "position": [
+                1780,
+                200
+            ],
+            "credentials": {
+                "googleDriveOAuth2Api": {
+                    "id": "1",
+                    "name": "Google Drive OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "authentication": "serviceAccount",
+                "resource": "file",
+                "operation": "create",
+                "name": "={{$node['Format Documentation'].json['filename']}}.md",
+                "driveId": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": ""
+                },
+                "options": {
+                    "parentId": "={{$node['Create Docs Folder'].json['id']}}",
+                    "uploadType": "media"
+                },
+                "fileContent": "# {{$node['Format Documentation'].json['filename']}} - Documentation\n\n> Auto-generated on {{$node['Format Documentation'].json['timestamp']}} using DocuWriter.ai\n\n{{$node['Generate Documentation'].json['data']['generated']}}\n\n{{#if $node['Generate UML'].json['data']['diagram']}}\n## UML Diagram\n\n```\n{{$node['Generate UML'].json['data']['diagram']}}\n```\n{{/if}}\n\n---\n*Generated automatically by DocuWriter.ai*"
+            },
+            "id": "create-markdown-file",
+            "name": "Create Markdown File",
+            "type": "n8n-nodes-base.googleDrive",
+            "typeVersion": 3,
+            "position": [
+                1780,
+                400
+            ],
+            "credentials": {
+                "googleDriveOAuth2Api": {
+                    "id": "1",
+                    "name": "Google Drive OAuth2 API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create summary of all created documents\nconst sourceData = $node['Format Documentation'].json;\nconst docsFolder = $node['Create Docs Folder'].json;\nconst googleDoc = $node['Create Google Doc'].json;\nconst markdownFile = $node['Create Markdown File'].json;\n\nreturn [{\n  json: {\n    summary: {\n      sourceFile: sourceData.filename,\n      docsFolder: {\n        id: docsFolder.id,\n        name: docsFolder.name,\n        webViewLink: docsFolder.webViewLink\n      },\n      googleDoc: {\n        id: googleDoc.id,\n        webViewLink: googleDoc.webViewLink\n      },\n      markdownFile: {\n        id: markdownFile.id,\n        webViewLink: markdownFile.webViewLink\n      },\n      timestamp: sourceData.timestamp\n    }\n  }\n}];"
+            },
+            "id": "create-summary",
+            "name": "Create Summary",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "noreply@yourcompany.com",
+                "toEmail": "team@yourcompany.com",
+                "subject": "📄 New Documentation Generated: {{$node['Format Documentation'].json['filename']}}",
+                "emailFormat": "html",
+                "html": "<h2>🎉 Documentation Successfully Generated!</h2>\n\n<p>A new code file has been processed and documentation has been automatically generated:</p>\n\n<table style=\"border-collapse: collapse; width: 100%;\">\n  <tr style=\"background-color: #f2f2f2;\">\n    <td style=\"border: 1px solid #ddd; padding: 8px;\"><strong>Source File</strong></td>\n    <td style=\"border: 1px solid #ddd; padding: 8px;\">{{$json.summary.sourceFile}}</td>\n  </tr>\n  <tr>\n    <td style=\"border: 1px solid #ddd; padding: 8px;\"><strong>Generated On</strong></td>\n    <td style=\"border: 1px solid #ddd; padding: 8px;\">{{$json.summary.timestamp}}</td>\n  </tr>\n  <tr style=\"background-color: #f2f2f2;\">\n    <td style=\"border: 1px solid #ddd; padding: 8px;\"><strong>Documentation Folder</strong></td>\n    <td style=\"border: 1px solid #ddd; padding: 8px;\"><a href=\"{{$json.summary.docsFolder.webViewLink}}\">{{$json.summary.docsFolder.name}}</a></td>\n  </tr>\n</table>\n\n<h3>📋 Generated Documents:</h3>\n<ul>\n  <li><a href=\"{{$json.summary.googleDoc.webViewLink}}\">📄 Google Doc Version</a> - Rich formatted documentation</li>\n  <li><a href=\"{{$json.summary.markdownFile.webViewLink}}\">📝 Markdown Version</a> - Developer-friendly format</li>\n</ul>\n\n<p>All documentation is now available in your Google Drive and ready for review!</p>\n\n<hr>\n<p><em>Generated automatically by DocuWriter.ai via n8n</em></p>"
+            },
+            "id": "send-notification-email",
+            "name": "Send Notification Email",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2,
+            "position": [
+                2220,
+                200
+            ],
+            "credentials": {
+                "smtp": {
+                    "id": "1",
+                    "name": "SMTP"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "channel": "#documentation",
+                "text": "📄 New documentation generated from Google Drive!",
+                "attachments": [
+                    {
+                        "color": "good",
+                        "title": "{{$node['Format Documentation'].json['filename']}} Documentation",
+                        "text": "Code documentation has been automatically generated and saved to Google Drive.",
+                        "fields": [
+                            {
+                                "title": "Source File",
+                                "value": "{{$node['Format Documentation'].json['filename']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Generated",
+                                "value": "{{$node['Format Documentation'].json['timestamp']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Folder",
+                                "value": "{{$node['Create Docs Folder'].json['name']}}",
+                                "short": true
+                            },
+                            {
+                                "title": "Status",
+                                "value": "✅ Complete",
+                                "short": true
+                            }
+                        ],
+                        "actions": [
+                            {
+                                "type": "button",
+                                "text": "View Google Doc",
+                                "url": "{{$node['Create Google Doc'].json['webViewLink']}}"
+                            },
+                            {
+                                "type": "button",
+                                "text": "View Folder",
+                                "url": "{{$node['Create Docs Folder'].json['webViewLink']}}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "id": "notify-slack",
+            "name": "Notify Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 1,
+            "position": [
+                2220,
+                400
+            ],
+            "credentials": {
+                "slackApi": {
+                    "id": "1",
+                    "name": "Slack API"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Google Drive File Created": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Download File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download File": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Source Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Source Code": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate UML",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Format Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate UML": {
+            "main": [
+                [
+                    {
+                        "node": "Format Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Create Docs Folder",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Docs Folder": {
+            "main": [
+                [
+                    {
+                        "node": "Create Google Doc",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Create Markdown File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Google Doc": {
+            "main": [
+                [
+                    {
+                        "node": "Create Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Markdown File": {
+            "main": [
+                [
+                    {
+                        "node": "Create Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Summary": {
+            "main": [
+                [
+                    {
+                        "node": "Send Notification Email",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Notify Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": {},
+    "tags": [
+        {
+            "id": "docuwriter",
+            "name": "DocuWriter.ai"
+        },
+        {
+            "id": "google-drive",
+            "name": "Google Drive"
+        },
+        {
+            "id": "documentation",
+            "name": "Documentation"
+        },
+        {
+            "id": "automation",
+            "name": "Automation"
+        }
+    ],
+    "meta": {
+        "templateCredsSetupCompleted": false
+    }
+}

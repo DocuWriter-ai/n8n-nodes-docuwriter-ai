@@ -1,0 +1,597 @@
+{
+    "name": "Notion Documentation Automation",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "cronExpression",
+                            "expression": "0 9 * * 1"
+                        }
+                    ]
+                }
+            },
+            "id": "weekly-schedule",
+            "name": "Weekly Documentation Schedule",
+            "type": "n8n-nodes-base.cron",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "database",
+                "operation": "search",
+                "query": "Documentation Projects",
+                "options": {
+                    "filter": {
+                        "property": "Status",
+                        "select": {
+                            "equals": "Active"
+                        }
+                    }
+                }
+            },
+            "id": "get-active-projects",
+            "name": "Get Active Documentation Projects",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract project information from Notion database\nconst projects = $json.results || [];\n\nreturn projects.map(project => {\n  const properties = project.properties;\n  \n  return {\n    json: {\n      projectId: project.id,\n      projectName: properties['Project Name']?.title?.[0]?.plain_text || 'Unnamed Project',\n      repositoryUrl: properties['Repository URL']?.url || '',\n      documentationFolder: properties['Documentation Folder']?.rich_text?.[0]?.plain_text || 'docs',\n      priority: properties['Priority']?.select?.name || 'Medium',\n      lastUpdated: properties['Last Updated']?.date?.start || null,\n      notionPageId: properties['Notion Page']?.relation?.[0]?.id || null\n    }\n  };\n});"
+            },
+            "id": "parse-project-info",
+            "name": "Parse Project Information",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "getRepositoryContent",
+                "owner": "={{ $json.repositoryUrl.split('/')[3] }}",
+                "repository": "={{ $json.repositoryUrl.split('/')[4] }}",
+                "filePath": "/",
+                "additionalFields": {}
+            },
+            "id": "list-repo-files",
+            "name": "List Repository Files",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter and prepare code files for documentation\nconst files = $json || [];\nconst codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.scala', '.kt', '.swift', '.vue', '.svelte'];\nconst projectInfo = $('Parse Project Information').first().json;\n\nconst codeFiles = files.filter(file => {\n  if (file.type !== 'file') return false;\n  const extension = '.' + file.name.split('.').pop().toLowerCase();\n  return codeExtensions.includes(extension);\n}).slice(0, 8); // Limit for performance\n\nreturn codeFiles.map(file => ({\n  json: {\n    ...projectInfo,\n    fileName: file.name,\n    filePath: file.path,\n    downloadUrl: file.download_url,\n    extension: '.' + file.name.split('.').pop().toLowerCase(),\n    sha: file.sha\n  }\n}));"
+            },
+            "id": "filter-code-files",
+            "name": "Filter Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{ $json.downloadUrl }}",
+                "options": {}
+            },
+            "id": "download-file-content",
+            "name": "Download File Content",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1340,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Prepare source code for DocuWriter.ai\nconst sourceCode = $json.body || $json.data;\n\nreturn {\n  json: {\n    sourceCode: sourceCode,\n    fileName: $json.fileName,\n    filePath: $json.filePath,\n    language: $json.extension.replace('.', ''),\n    project: {\n      id: $json.projectId,\n      name: $json.projectName,\n      repository: $json.repositoryUrl,\n      notionPageId: $json.notionPageId,\n      priority: $json.priority\n    }\n  }\n};"
+            },
+            "id": "prepare-for-ai",
+            "name": "Prepare for AI Analysis",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Documentation",
+                "mode": "accurate",
+                "additionalInstructions": "Generate comprehensive documentation for this {{ $json.language }} file from project {{ $json.project.name }}. Include: 1) Clear purpose and functionality overview, 2) Key features and capabilities, 3) Dependencies and requirements, 4) Usage examples with code snippets, 5) Configuration options, 6) Best practices and tips. Format for Notion page display with proper headings and structure."
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "UML Diagrams",
+                "mode": "fast",
+                "additionalInstructions": "Create clear UML diagrams for {{ $json.fileName }} from {{ $json.project.name }}. Focus on class relationships, data flow, and system architecture that will help team members understand the codebase structure."
+            },
+            "id": "generate-diagrams",
+            "name": "Generate UML Diagrams",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate Documentation",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                2000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create organized documentation content for Notion\nconst items = $input.all();\nconst projectInfo = items[0].json.project;\n\nlet documentationSections = [];\nlet diagramSections = [];\n\n// Organize content by type\nfor (const item of items) {\n  if (item.json.generatedContent && item.json.fileName) {\n    if (item.json.generatedContent.includes('mermaid') || item.json.generatedContent.includes('UML')) {\n      diagramSections.push({\n        fileName: item.json.fileName,\n        filePath: item.json.filePath,\n        content: item.json.generatedContent,\n        language: item.json.language\n      });\n    } else {\n      documentationSections.push({\n        fileName: item.json.fileName,\n        filePath: item.json.filePath,\n        content: item.json.generatedContent,\n        language: item.json.language\n      });\n    }\n  }\n}\n\n// Create structured content for Notion page\nconst notionBlocks = {\n  header: {\n    type: 'heading_1',\n    heading_1: {\n      rich_text: [{\n        type: 'text',\n        text: { content: `📚 ${projectInfo.name} - Documentation` }\n      }]\n    }\n  },\n  timestamp: {\n    type: 'paragraph',\n    paragraph: {\n      rich_text: [{\n        type: 'text',\n        text: { content: `Generated on ${new Date().toLocaleDateString()} | Priority: ${projectInfo.priority}` }\n      }]\n    }\n  },\n  divider: { type: 'divider', divider: {} }\n};\n\nreturn {\n  json: {\n    projectInfo: projectInfo,\n    documentationSections: documentationSections,\n    diagramSections: diagramSections,\n    notionBlocks: notionBlocks,\n    totalFiles: items.length,\n    generatedAt: new Date().toISOString()\n  }\n};"
+            },
+            "id": "organize-content",
+            "name": "Organize Content for Notion",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "page",
+                "operation": "create",
+                "parentId": "={{ $json.projectInfo.notionPageId || 'workspace' }}",
+                "title": "📚 {{ $json.projectInfo.name }} - Code Documentation ({{ new Date().toISOString().split('T')[0] }})",
+                "pageContent": {
+                    "pageBlocks": [
+                        {
+                            "type": "heading_1",
+                            "rich_text": "📚 {{ $json.projectInfo.name }} - Documentation Overview"
+                        },
+                        {
+                            "type": "paragraph",
+                            "rich_text": "Generated on {{ new Date().toLocaleDateString() }} | Files Analyzed: {{ $json.totalFiles }} | Priority: {{ $json.projectInfo.priority }}"
+                        },
+                        {
+                            "type": "divider"
+                        },
+                        {
+                            "type": "heading_2",
+                            "rich_text": "📖 Code Documentation"
+                        }
+                    ]
+                }
+            },
+            "id": "create-main-page",
+            "name": "Create Main Documentation Page",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                2440,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create individual pages for each documented file\nconst mainPageData = $input.all()[0].json;\nconst orgData = $('Organize Content for Notion').first().json;\n\nconst filePagesToCreate = [];\n\n// Create documentation pages\nfor (const section of orgData.documentationSections) {\n  filePagesToCreate.push({\n    json: {\n      parentPageId: mainPageData.id,\n      fileName: section.fileName,\n      filePath: section.filePath,\n      content: section.content,\n      language: section.language,\n      type: 'documentation',\n      projectInfo: orgData.projectInfo\n    }\n  });\n}\n\n// Create diagram pages\nfor (const section of orgData.diagramSections) {\n  filePagesToCreate.push({\n    json: {\n      parentPageId: mainPageData.id,\n      fileName: section.fileName,\n      filePath: section.filePath,\n      content: section.content,\n      language: section.language,\n      type: 'diagrams',\n      projectInfo: orgData.projectInfo\n    }\n  });\n}\n\nreturn filePagesToCreate;"
+            },
+            "id": "prepare-file-pages",
+            "name": "Prepare Individual File Pages",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "page",
+                "operation": "create",
+                "parentId": "={{ $json.parentPageId }}",
+                "title": "{{ $json.type === 'diagrams' ? '📊' : '📄' }} {{ $json.fileName }}",
+                "pageContent": {
+                    "pageBlocks": [
+                        {
+                            "type": "heading_1",
+                            "rich_text": "{{ $json.type === 'diagrams' ? '📊 Diagrams for' : '📄 Documentation for' }} {{ $json.fileName }}"
+                        },
+                        {
+                            "type": "paragraph",
+                            "rich_text": "File: {{ $json.filePath }} | Language: {{ $json.language }} | Type: {{ $json.type }}"
+                        },
+                        {
+                            "type": "divider"
+                        },
+                        {
+                            "type": "paragraph",
+                            "rich_text": "{{ $json.content }}"
+                        }
+                    ]
+                }
+            },
+            "id": "create-file-pages",
+            "name": "Create Individual File Pages",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                2880,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-pages",
+            "name": "Aggregate Created Pages",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                3100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "page",
+                "operation": "update",
+                "pageId": "={{ $('Parse Project Information').first().json.projectId }}",
+                "updateFields": {
+                    "propertiesUi": {
+                        "propertyValues": [
+                            {
+                                "key": "Last Updated",
+                                "dateValue": "{{ new Date().toISOString().split('T')[0] }}"
+                            },
+                            {
+                                "key": "Status",
+                                "selectValue": "Documented"
+                            },
+                            {
+                                "key": "Files Count",
+                                "numberValue": "={{ $('Organize Content for Notion').first().json.totalFiles }}"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "update-project-status",
+            "name": "Update Project Status",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                3320,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "#documentation",
+                "text": "📚 Notion Documentation Generated",
+                "attachments": [
+                    {
+                        "color": "#000000",
+                        "title": "Documentation Complete - {{ $('Parse Project Information').first().json.projectName }}",
+                        "title_link": "{{ $('Create Main Documentation Page').first().json.url }}",
+                        "text": "DocuWriter.ai has generated comprehensive documentation in your Notion workspace",
+                        "fields": [
+                            {
+                                "title": "Files Documented",
+                                "value": "{{ $('Organize Content for Notion').first().json.totalFiles }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Priority",
+                                "value": "{{ $('Parse Project Information').first().json.priority }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Repository",
+                                "value": "{{ $('Parse Project Information').first().json.repositoryUrl }}",
+                                "short": false
+                            }
+                        ],
+                        "footer": "DocuWriter.ai",
+                        "ts": "{{ Math.floor(Date.now() / 1000) }}"
+                    }
+                ]
+            },
+            "id": "notify-team",
+            "name": "Notify Team via Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                3540,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "team@company.com",
+                "subject": "📚 Weekly Documentation Report - {{ new Date().toLocaleDateString() }}",
+                "text": "Weekly Documentation Report\\n\\nDocuWriter.ai has completed the weekly documentation generation for your active projects.\\n\\n📊 Summary:\\n- Project: {{ $('Parse Project Information').first().json.projectName }}\\n- Files Documented: {{ $('Organize Content for Notion').first().json.totalFiles }}\\n- Documentation Pages Created: {{ $('Aggregate Created Pages').first().json.length }}\\n- Notion Workspace Updated: ✅\\n\\n🔗 View Documentation:\\n{{ $('Create Main Documentation Page').first().json.url }}\\n\\nThe documentation includes:\\n- Comprehensive code documentation\\n- Architecture diagrams and UML\\n- Organized by file and component\\n- Searchable in Notion\\n\\nBest regards,\\nDocuWriter.ai Automation"
+            },
+            "id": "send-summary-email",
+            "name": "Send Weekly Summary Email",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                3760,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Weekly Documentation Schedule": {
+            "main": [
+                [
+                    {
+                        "node": "Get Active Documentation Projects",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Active Documentation Projects": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Project Information",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Project Information": {
+            "main": [
+                [
+                    {
+                        "node": "List Repository Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "List Repository Files": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Download File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare for AI Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare for AI Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate UML Diagrams",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate UML Diagrams": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Organize Content for Notion",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Organize Content for Notion": {
+            "main": [
+                [
+                    {
+                        "node": "Create Main Documentation Page",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Main Documentation Page": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Individual File Pages",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Individual File Pages": {
+            "main": [
+                [
+                    {
+                        "node": "Create Individual File Pages",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Individual File Pages": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Created Pages",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Created Pages": {
+            "main": [
+                [
+                    {
+                        "node": "Update Project Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Project Status": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Team via Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notify Team via Slack": {
+            "main": [
+                [
+                    {
+                        "node": "Send Weekly Summary Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "notion-integration",
+            "name": "notion-integration"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "scheduled-documentation",
+            "name": "scheduled-documentation"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "team-collaboration",
+            "name": "team-collaboration"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-15T10:00:00.000Z",
+    "versionId": "1"
+}

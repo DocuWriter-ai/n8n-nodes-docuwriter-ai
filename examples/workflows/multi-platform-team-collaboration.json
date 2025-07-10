@@ -1,0 +1,811 @@
+{
+    "name": "Multi-Platform Team Collaboration & Documentation",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "slack-doc-command",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "slack-command-trigger",
+            "name": "Slack Doc Command Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "slack-doc-command"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Parse Slack slash command for documentation request\nconst slackPayload = $json;\nconst command = slackPayload.text || '';\nconst userId = slackPayload.user_id;\nconst userName = slackPayload.user_name;\nconst channelId = slackPayload.channel_id;\n\n// Parse command: /docuwriter [github|notion|analyze] [repository-url] [options]\nconst parts = command.split(' ');\nconst action = parts[0] || 'help';\nconst target = parts[1] || '';\nconst options = parts.slice(2).join(' ') || '';\n\nreturn {\n  json: {\n    action: action.toLowerCase(),\n    target: target,\n    options: options,\n    user: {\n      id: userId,\n      name: userName\n    },\n    channel: {\n      id: channelId\n    },\n    timestamp: Date.now(),\n    isValidCommand: ['github', 'notion', 'analyze', 'help'].includes(action.toLowerCase())\n  }\n};"
+            },
+            "id": "parse-slack-command",
+            "name": "Parse Slack Command",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "valid-command-condition",
+                            "leftValue": "={{ $json.isValidCommand }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "validate-command",
+            "name": "Validate Command",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "chooseBranch",
+                "output": "input",
+                "rules": {
+                    "values": [
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict"
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.action }}",
+                                        "rightValue": "github",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "github"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict"
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.action }}",
+                                        "rightValue": "notion",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "notion"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict"
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.action }}",
+                                        "rightValue": "analyze",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "analyze"
+                        }
+                    ]
+                },
+                "fallbackOutput": "extra"
+            },
+            "id": "route-by-action",
+            "name": "Route by Action",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract GitHub repository information from URL\nconst repoUrl = $json.target;\nconst urlParts = repoUrl.replace('https://github.com/', '').split('/');\n\nif (urlParts.length < 2) {\n  throw new Error('Invalid GitHub repository URL. Please provide a valid GitHub URL.');\n}\n\nconst owner = urlParts[0];\nconst repo = urlParts[1];\n\nreturn {\n  json: {\n    ...($json),\n    github: {\n      owner: owner,\n      repository: repo,\n      fullName: `${owner}/${repo}`,\n      url: `https://github.com/${owner}/${repo}`\n    }\n  }\n};"
+            },
+            "id": "parse-github-info",
+            "name": "Parse GitHub Repository Info",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "getRepositoryContent",
+                "owner": "={{ $json.github.owner }}",
+                "repository": "={{ $json.github.repository }}",
+                "filePath": "/",
+                "additionalFields": {}
+            },
+            "id": "get-github-files",
+            "name": "Get GitHub Repository Files",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter and select code files for documentation\nconst files = $json || [];\nconst codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.vue', '.svelte'];\nconst commandData = $('Parse GitHub Repository Info').first().json;\n\nconst codeFiles = files.filter(file => {\n  if (file.type !== 'file') return false;\n  const extension = '.' + file.name.split('.').pop().toLowerCase();\n  return codeExtensions.includes(extension);\n}).slice(0, 5); // Limit to 5 files for Slack processing\n\nreturn codeFiles.map(file => ({\n  json: {\n    ...commandData,\n    file: {\n      name: file.name,\n      path: file.path,\n      downloadUrl: file.download_url,\n      extension: '.' + file.name.split('.').pop().toLowerCase(),\n      language: file.name.split('.').pop().toLowerCase()\n    }\n  }\n}));"
+            },
+            "id": "filter-github-files",
+            "name": "Filter GitHub Code Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{ $json.file.downloadUrl }}",
+                "options": {}
+            },
+            "id": "download-github-file",
+            "name": "Download GitHub File",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1780,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.body }}",
+                "generationType": "Documentation",
+                "mode": "fast",
+                "additionalInstructions": "Generate concise documentation for {{ $json.file.name }} from {{ $json.github.fullName }}. Focus on key functionality, purpose, and usage. Keep it brief for Slack presentation but comprehensive for team understanding."
+            },
+            "id": "generate-github-docs",
+            "name": "Generate GitHub Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                2000,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "database",
+                "operation": "getMany",
+                "databaseId": "{{ $json.target }}",
+                "options": {}
+            },
+            "id": "get-notion-database",
+            "name": "Get Notion Database",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract code content from Notion database entries\nconst pages = $json.results || [];\nconst commandData = $('Route by Action').first().json;\nconst codePages = [];\n\nfor (const page of pages) {\n  const properties = page.properties;\n  \n  // Look for pages with code content\n  if (properties['Code'] && properties['Code'].rich_text && properties['Code'].rich_text.length > 0) {\n    const codeContent = properties['Code'].rich_text[0].plain_text;\n    const fileName = properties['Name']?.title?.[0]?.plain_text || 'Untitled';\n    const language = properties['Language']?.select?.name || 'text';\n    \n    codePages.push({\n      json: {\n        ...commandData,\n        notion: {\n          pageId: page.id,\n          fileName: fileName,\n          language: language,\n          codeContent: codeContent\n        }\n      }\n    });\n  }\n}\n\nreturn codePages.slice(0, 3); // Limit for processing"
+            },
+            "id": "extract-notion-code",
+            "name": "Extract Code from Notion",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.notion.codeContent }}",
+                "generationType": "Documentation",
+                "mode": "accurate",
+                "additionalInstructions": "Create comprehensive documentation for {{ $json.notion.fileName }} from Notion database. Include detailed explanations, usage examples, and best practices. Format for Notion page integration."
+            },
+            "id": "generate-notion-docs",
+            "name": "Generate Notion Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "block",
+                "operation": "append",
+                "pageId": "={{ $json.notion.pageId }}",
+                "blockUi": {
+                    "blockValues": [
+                        {
+                            "type": "heading_2",
+                            "rich_text": "📚 Generated Documentation"
+                        },
+                        {
+                            "type": "paragraph",
+                            "rich_text": "{{ $json.generatedContent }}"
+                        },
+                        {
+                            "type": "paragraph",
+                            "rich_text": "Generated by DocuWriter.ai on {{ new Date().toLocaleDateString() }}"
+                        }
+                    ]
+                }
+            },
+            "id": "update-notion-page",
+            "name": "Update Notion Page",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                1780,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.target }}",
+                "generationType": "Code Analysis",
+                "mode": "accurate",
+                "additionalInstructions": "Perform a comprehensive analysis of this code including: 1) Code quality assessment, 2) Potential improvements and optimizations, 3) Security considerations, 4) Performance analysis, 5) Best practices recommendations, 6) Architecture overview. Provide actionable insights for the development team."
+            },
+            "id": "analyze-code-quality",
+            "name": "Analyze Code Quality",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-github-results",
+            "name": "Aggregate GitHub Results",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                2220,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-notion-results",
+            "name": "Aggregate Notion Results",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                2000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create comprehensive Slack response for GitHub documentation\nconst items = $input.all();\nconst firstItem = items[0].json;\nconst repoInfo = firstItem.github;\nconst user = firstItem.user;\n\nlet documentationSummary = '';\nfor (const item of items) {\n  if (item.json.generatedContent && item.json.file) {\n    documentationSummary += `\\n• *${item.json.file.name}*: ${item.json.generatedContent.substring(0, 150)}...\\n`;\n  }\n}\n\nconst slackResponse = {\n  response_type: 'in_channel',\n  text: `📚 Documentation Generated for ${repoInfo.fullName}`,\n  attachments: [\n    {\n      color: '#36a64f',\n      title: `Repository Documentation - ${repoInfo.fullName}`,\n      title_link: repoInfo.url,\n      text: `Generated documentation for ${items.length} files`,\n      fields: [\n        {\n          title: 'Repository',\n          value: repoInfo.fullName,\n          short: true\n        },\n        {\n          title: 'Files Processed',\n          value: items.length.toString(),\n          short: true\n        },\n        {\n          title: 'Requested by',\n          value: user.name,\n          short: true\n        },\n        {\n          title: 'Generated',\n          value: new Date().toLocaleString(),\n          short: true\n        }\n      ],\n      footer: 'DocuWriter.ai',\n      ts: Math.floor(Date.now() / 1000)\n    }\n  ]\n};\n\nreturn {\n  json: {\n    slackResponse: slackResponse,\n    documentationContent: documentationSummary,\n    repoInfo: repoInfo,\n    user: user,\n    itemCount: items.length\n  }\n};"
+            },
+            "id": "format-github-response",
+            "name": "Format GitHub Slack Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2440,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create Slack response for Notion documentation\nconst items = $input.all();\nconst firstItem = items[0].json;\nconst user = firstItem.user;\n\nconst slackResponse = {\n  response_type: 'in_channel',\n  text: `📝 Notion Documentation Updated`,\n  attachments: [\n    {\n      color: '#000000',\n      title: `Documentation added to ${items.length} Notion pages`,\n      text: 'DocuWriter.ai has updated your Notion workspace with comprehensive documentation',\n      fields: [\n        {\n          title: 'Pages Updated',\n          value: items.length.toString(),\n          short: true\n        },\n        {\n          title: 'Requested by',\n          value: user.name,\n          short: true\n        }\n      ],\n      footer: 'DocuWriter.ai',\n      ts: Math.floor(Date.now() / 1000)\n    }\n  ]\n};\n\nreturn {\n  json: {\n    slackResponse: slackResponse,\n    user: user,\n    itemCount: items.length\n  }\n};"
+            },
+            "id": "format-notion-response",
+            "name": "Format Notion Slack Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Create Slack response for code analysis\nconst analysis = $json.generatedContent;\nconst commandData = $('Route by Action').first().json;\nconst user = commandData.user;\n\nconst slackResponse = {\n  response_type: 'in_channel',\n  text: `🔍 Code Analysis Complete`,\n  attachments: [\n    {\n      color: '#ff9500',\n      title: 'Code Quality Analysis',\n      text: analysis.substring(0, 300) + '...',\n      fields: [\n        {\n          title: 'Analysis Type',\n          value: 'Code Quality & Security',\n          short: true\n        },\n        {\n          title: 'Requested by',\n          value: user.name,\n          short: true\n        }\n      ],\n      footer: 'DocuWriter.ai',\n      ts: Math.floor(Date.now() / 1000)\n    }\n  ]\n};\n\nreturn {\n  json: {\n    slackResponse: slackResponse,\n    analysisContent: analysis,\n    user: user\n  }\n};"
+            },
+            "id": "format-analysis-response",
+            "name": "Format Analysis Slack Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "{{ $json.user.name }}@company.com",
+                "subject": "📚 GitHub Documentation Generated - {{ $json.repoInfo.fullName }}",
+                "text": "Hi {{ $json.user.name }},\n\nYour GitHub repository documentation has been generated successfully!\n\n📋 Repository: {{ $json.repoInfo.fullName }}\n📊 Files Processed: {{ $json.itemCount }}\n🕒 Generated: {{ new Date().toLocaleString() }}\n\n📖 Documentation Summary:\n{{ $json.documentationContent }}\n\n🔗 Repository: {{ $json.repoInfo.url }}\n\nThe documentation is now available and has been shared with your team via Slack.\n\nBest regards,\nDocuWriter.ai Team"
+            },
+            "id": "send-github-email",
+            "name": "Send GitHub Email Notification",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                2660,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "{{ $json.user.name }}@company.com",
+                "subject": "📝 Notion Documentation Updated",
+                "text": "Hi {{ $json.user.name }},\n\nYour Notion workspace has been updated with comprehensive documentation!\n\n📊 Pages Updated: {{ $json.itemCount }}\n🕒 Generated: {{ new Date().toLocaleString() }}\n\nThe documentation has been added directly to your Notion pages and is ready for team collaboration.\n\nYou can access your updated Notion workspace to review the new documentation.\n\nBest regards,\nDocuWriter.ai Team"
+            },
+            "id": "send-notion-email",
+            "name": "Send Notion Email Notification",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                2440,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "toEmail": "{{ $json.user.name }}@company.com",
+                "subject": "🔍 Code Analysis Report",
+                "text": "Hi {{ $json.user.name }},\n\nYour code analysis has been completed!\n\n🕒 Generated: {{ new Date().toLocaleString() }}\n\n📊 Analysis Report:\n{{ $json.analysisContent }}\n\nThis analysis includes code quality assessment, security considerations, performance recommendations, and best practices.\n\nReview the findings and consider implementing the suggested improvements for better code quality.\n\nBest regards,\nDocuWriter.ai Team"
+            },
+            "id": "send-analysis-email",
+            "name": "Send Analysis Email Notification",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                1560,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json.slackResponse }}"
+            },
+            "id": "respond-to-slack-github",
+            "name": "Respond to Slack (GitHub)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2880,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json.slackResponse }}"
+            },
+            "id": "respond-to-slack-notion",
+            "name": "Respond to Slack (Notion)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json.slackResponse }}"
+            },
+            "id": "respond-to-slack-analysis",
+            "name": "Respond to Slack (Analysis)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"response_type\": \"ephemeral\", \"text\": \"❌ Invalid command. Use: `/docuwriter [github|notion|analyze] [target] [options]`\\n\\n**Available commands:**\\n• `/docuwriter github <repo-url>` - Generate docs for GitHub repo\\n• `/docuwriter notion <database-id>` - Update Notion database with docs\\n• `/docuwriter analyze <code>` - Analyze code quality\\n• `/docuwriter help` - Show this help\" } }}"
+            },
+            "id": "respond-invalid-command",
+            "name": "Respond Invalid Command",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                680,
+                480
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"response_type\": \"ephemeral\", \"text\": \"📚 **DocuWriter.ai Help**\\n\\nGenerate documentation and analyze code using Slack commands:\\n\\n**Commands:**\\n• `/docuwriter github <repo-url>` - Generate documentation for GitHub repository\\n• `/docuwriter notion <database-id>` - Update Notion database with documentation\\n• `/docuwriter analyze <code>` - Perform code quality analysis\\n\\n**Examples:**\\n• `/docuwriter github https://github.com/user/repo`\\n• `/docuwriter notion abc123def456`\\n• `/docuwriter analyze function calculateTotal() { ... }`\\n\\n**Features:**\\n✅ Multi-platform integration\\n✅ Real-time documentation generation\\n✅ Code quality analysis\\n✅ Team notifications\\n✅ Email reports\" } }}"
+            },
+            "id": "respond-help-command",
+            "name": "Respond Help Command",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                500
+            ]
+        }
+    ],
+    "connections": {
+        "Slack Doc Command Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Slack Command",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Slack Command": {
+            "main": [
+                [
+                    {
+                        "node": "Validate Command",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Validate Command": {
+            "main": [
+                [
+                    {
+                        "node": "Route by Action",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Respond Invalid Command",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Route by Action": {
+            "main": [
+                [
+                    {
+                        "node": "Parse GitHub Repository Info",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Get Notion Database",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Analyze Code Quality",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Respond Help Command",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse GitHub Repository Info": {
+            "main": [
+                [
+                    {
+                        "node": "Get GitHub Repository Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get GitHub Repository Files": {
+            "main": [
+                [
+                    {
+                        "node": "Filter GitHub Code Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter GitHub Code Files": {
+            "main": [
+                [
+                    {
+                        "node": "Download GitHub File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download GitHub File": {
+            "main": [
+                [
+                    {
+                        "node": "Generate GitHub Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate GitHub Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate GitHub Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Notion Database": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Code from Notion",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Code from Notion": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Notion Documentation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Notion Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Update Notion Page",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Notion Page": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Notion Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Analyze Code Quality": {
+            "main": [
+                [
+                    {
+                        "node": "Format Analysis Slack Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate GitHub Results": {
+            "main": [
+                [
+                    {
+                        "node": "Format GitHub Slack Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Notion Results": {
+            "main": [
+                [
+                    {
+                        "node": "Format Notion Slack Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format GitHub Slack Response": {
+            "main": [
+                [
+                    {
+                        "node": "Send GitHub Email Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Notion Slack Response": {
+            "main": [
+                [
+                    {
+                        "node": "Send Notion Email Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Analysis Slack Response": {
+            "main": [
+                [
+                    {
+                        "node": "Send Analysis Email Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send GitHub Email Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Slack (GitHub)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Notion Email Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Slack (Notion)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Analysis Email Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Slack (Analysis)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "multi-platform",
+            "name": "multi-platform"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "slack-integration",
+            "name": "slack-integration"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "team-collaboration",
+            "name": "team-collaboration"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-15T10:00:00.000Z",
+    "versionId": "1"
+}

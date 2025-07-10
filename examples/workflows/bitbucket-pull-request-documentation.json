@@ -1,0 +1,438 @@
+{
+    "name": "Bitbucket Pull Request Documentation & Analysis",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "bitbucket-pr-webhook",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "bb-webhook-trigger",
+            "name": "Bitbucket PR Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "webhookId": "bitbucket-pr-webhook"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "pr-created-condition",
+                            "leftValue": "={{ $json.eventKey }}",
+                            "rightValue": "pullrequest:created",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "filter-pr-created",
+            "name": "Filter: PR Created",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "pullRequest",
+                "operation": "getDiff",
+                "workspace": "={{ $json.pullrequest.source.repository.workspace.uuid }}",
+                "repositoryId": "={{ $json.pullrequest.source.repository.uuid }}",
+                "pullRequestId": "={{ $json.pullrequest.id }}",
+                "additionalFields": {}
+            },
+            "id": "get-pr-diff",
+            "name": "Get PR Diff",
+            "type": "n8n-nodes-base.bitbucket",
+            "typeVersion": 1,
+            "position": [
+                680,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract changed files from diff and filter for code files\nconst diffText = $input.first().json.body;\nconst codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.scala', '.kt', '.swift', '.vue', '.svelte'];\n\n// Parse diff to extract file paths\nconst diffLines = diffText.split('\\n');\nconst changedFiles = [];\n\nfor (const line of diffLines) {\n  if (line.startsWith('diff --git')) {\n    const match = line.match(/diff --git a\\/(.*?) b\\/(.*?)$/);\n    if (match) {\n      const filePath = match[2];\n      const extension = '.' + filePath.split('.').pop().toLowerCase();\n      \n      if (codeExtensions.includes(extension)) {\n        changedFiles.push({\n          path: filePath,\n          extension: extension,\n          workspace: $json.pullrequest.source.repository.workspace.uuid,\n          repository: $json.pullrequest.source.repository.uuid,\n          commit: $json.pullrequest.source.commit.hash\n        });\n      }\n    }\n  }\n}\n\nreturn changedFiles.map(file => ({ json: file }));"
+            },
+            "id": "extract-changed-files",
+            "name": "Extract Changed Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                900,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "repository",
+                "operation": "getContent",
+                "workspace": "={{ $json.workspace }}",
+                "repositoryId": "={{ $json.repository }}",
+                "filePath": "={{ $json.path }}",
+                "additionalFields": {
+                    "ref": "={{ $json.commit }}"
+                }
+            },
+            "id": "get-file-content",
+            "name": "Get File Content",
+            "type": "n8n-nodes-base.bitbucket",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Prepare source code for DocuWriter.ai\nconst fileContent = $json.body;\nconst filePath = $json.path;\nconst prData = $('Bitbucket PR Webhook').first().json;\n\nreturn {\n  json: {\n    sourceCode: fileContent,\n    fileName: filePath.split('/').pop(),\n    filePath: filePath,\n    language: $json.extension.replace('.', ''),\n    pullRequest: {\n      id: prData.pullrequest.id,\n      title: prData.pullrequest.title,\n      description: prData.pullrequest.description || '',\n      author: prData.pullrequest.author.display_name,\n      sourceBranch: prData.pullrequest.source.branch.name,\n      targetBranch: prData.pullrequest.destination.branch.name,\n      repository: prData.pullrequest.destination.repository.full_name\n    }\n  }\n};"
+            },
+            "id": "prepare-source-code",
+            "name": "Prepare Source Code",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1340,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Documentation",
+                "mode": "accurate",
+                "additionalInstructions": "This is analysis for pull request #{{ $json.pullRequest.id }} in {{ $json.pullRequest.repository }}. Focus on changes and their impact. Include: 1) What this code does, 2) How it relates to the PR changes, 3) Any potential issues or improvements, 4) Dependencies and interactions with other components."
+            },
+            "id": "generate-documentation",
+            "name": "Generate Documentation",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                220
+            ]
+        },
+        {
+            "parameters": {
+                "sourceCode": "={{ $json.sourceCode }}",
+                "generationType": "Tests",
+                "mode": "fast",
+                "additionalInstructions": "Generate comprehensive test suggestions for this code that's part of pull request #{{ $json.pullRequest.id }}. Focus on edge cases and scenarios that should be tested before merging."
+            },
+            "id": "generate-test-suggestions",
+            "name": "Generate Test Suggestions",
+            "type": "docuwriter-ai",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "aggregateItems",
+                "aggregate": {
+                    "aggregate": "aggregateAllItemData"
+                },
+                "options": {}
+            },
+            "id": "aggregate-results",
+            "name": "Aggregate Results",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 3,
+            "position": [
+                1780,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Combine all documentation and test results into a comprehensive PR comment\nconst items = $input.all();\nconst prData = items[0].json.pullRequest;\n\nlet documentation = '';\nlet testSuggestions = '';\n\n// Separate documentation and test results\nfor (const item of items) {\n  if (item.json.generatedContent && item.json.fileName) {\n    if (item.json.generatedContent.includes('Test') || item.json.generatedContent.includes('test')) {\n      testSuggestions += `\\n### Test Suggestions for \\`${item.json.fileName}\\`\\n\\n${item.json.generatedContent}\\n\\n---\\n`;\n    } else {\n      documentation += `\\n### Documentation for \\`${item.json.fileName}\\`\\n\\n${item.json.generatedContent}\\n\\n---\\n`;\n    }\n  }\n}\n\n// Create comprehensive PR comment\nconst prComment = `# 📋 Pull Request Analysis\n\n**Generated by DocuWriter.ai**\n\n## 📖 Code Documentation\n${documentation}\n\n## 🧪 Testing Recommendations\n${testSuggestions}\n\n## 📊 PR Summary\n- **Files Analyzed**: ${items.length} code files\n- **Branch**: \\`${prData.sourceBranch}\\` → \\`${prData.targetBranch}\\`\n- **Author**: ${prData.author}\n\n---\n*This analysis was automatically generated on ${new Date().toISOString().split('T')[0]}*`;\n\nreturn {\n  json: {\n    comment: prComment,\n    pullRequestId: prData.id,\n    repository: prData.repository,\n    workspace: prData.repository.split('/')[0],\n    repoSlug: prData.repository.split('/')[1]\n  }\n};"
+            },
+            "id": "format-pr-comment",
+            "name": "Format PR Comment",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "pullRequest",
+                "operation": "addComment",
+                "workspace": "={{ $json.workspace }}",
+                "repositoryId": "={{ $json.repoSlug }}",
+                "pullRequestId": "={{ $json.pullRequestId }}",
+                "content": "={{ $json.comment }}"
+            },
+            "id": "post-pr-comment",
+            "name": "Post PR Comment",
+            "type": "n8n-nodes-base.bitbucket",
+            "typeVersion": 1,
+            "position": [
+                2220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "#development",
+                "text": "📋 PR Analysis Complete",
+                "attachments": [
+                    {
+                        "color": "#36a64f",
+                        "title": "Pull Request #{{ $json.pullRequestId }} - {{ $('Bitbucket PR Webhook').first().json.pullrequest.title }}",
+                        "title_link": "{{ $('Bitbucket PR Webhook').first().json.pullrequest.links.html.href }}",
+                        "text": "Documentation and test analysis completed for {{ $json.repository }}",
+                        "fields": [
+                            {
+                                "title": "Author",
+                                "value": "{{ $('Bitbucket PR Webhook').first().json.pullrequest.author.display_name }}",
+                                "short": true
+                            },
+                            {
+                                "title": "Branch",
+                                "value": "{{ $('Bitbucket PR Webhook').first().json.pullrequest.source.branch.name }} → {{ $('Bitbucket PR Webhook').first().json.pullrequest.destination.branch.name }}",
+                                "short": true
+                            }
+                        ],
+                        "footer": "DocuWriter.ai",
+                        "ts": "{{ Math.floor(Date.now() / 1000) }}"
+                    }
+                ]
+            },
+            "id": "notify-slack",
+            "name": "Notify Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                2440,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"success\", \"message\": \"PR analysis completed\", \"pullRequestId\": $json.pullRequestId } }}"
+            },
+            "id": "webhook-response",
+            "name": "Webhook Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"ignored\", \"message\": \"Not a pull request creation event\" } }}"
+            },
+            "id": "webhook-response-ignored",
+            "name": "Webhook Response (Ignored)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                460,
+                480
+            ]
+        }
+    ],
+    "connections": {
+        "Bitbucket PR Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Filter: PR Created",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter: PR Created": {
+            "main": [
+                [
+                    {
+                        "node": "Get PR Diff",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Webhook Response (Ignored)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get PR Diff": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Changed Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Changed Files": {
+            "main": [
+                [
+                    {
+                        "node": "Get File Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get File Content": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Source Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Source Code": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Documentation",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Generate Test Suggestions",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Documentation": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Test Suggestions": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Results": {
+            "main": [
+                [
+                    {
+                        "node": "Format PR Comment",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format PR Comment": {
+            "main": [
+                [
+                    {
+                        "node": "Post PR Comment",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Post PR Comment": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Slack",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notify Slack": {
+            "main": [
+                [
+                    {
+                        "node": "Webhook Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "bitbucket-integration",
+            "name": "bitbucket-integration"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "pull-request-analysis",
+            "name": "pull-request-analysis"
+        },
+        {
+            "createdAt": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T10:00:00.000Z",
+            "id": "code-review",
+            "name": "code-review"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-15T10:00:00.000Z",
+    "versionId": "1"
+}
