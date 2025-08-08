@@ -239,14 +239,24 @@ export class DocuWriter implements INodeType {
 			{
 				displayName: 'Documentation Type',
 				name: 'documentationType',
-				type: 'string',
+				type: 'options',
 				displayOptions: {
 					show: {
 						resource: ['codeDocumentation'],
 						operation: ['generate'],
 					},
 				},
-				default: 'Technical Documentation',
+				options: [
+					{ name: 'General Documentation', value: 'General Documentation' },
+					{ name: 'API Documentation', value: 'API Documentation' },
+					{ name: 'Library Documentation', value: 'Library Documentation' },
+					{ name: 'Usage Documentation', value: 'Usage Documentation' },
+					{ name: 'Database Documentation', value: 'Database Documentation' },
+					{ name: 'End-User Documentation', value: 'End-User Documentation' },
+					{ name: 'Testing Strategy', value: 'Testing Strategy' },
+					{ name: 'Deployment Documentation', value: 'Deployment Documentation' },
+				],
+				default: 'General Documentation',
 				description: 'Type of documentation to generate',
 			},
 
@@ -262,36 +272,15 @@ export class DocuWriter implements INodeType {
 					},
 				},
 				options: [
-					{
-						name: 'Class Diagram',
-						value: 'class',
-					},
-					{
-						name: 'Sequence Diagram',
-						value: 'sequence',
-					},
-					{
-						name: 'Use Case Diagram',
-						value: 'use_case',
-					},
-					{
-						name: 'Activity Diagram',
-						value: 'activity',
-					},
-					{
-						name: 'Component Diagram',
-						value: 'component',
-					},
-					{
-						name: 'State Diagram',
-						value: 'state',
-					},
-					{
-						name: 'Object Diagram',
-						value: 'object',
-					},
+					{ name: 'Class Diagrams', value: 'Class Diagrams' },
+					{ name: 'Sequence Diagrams', value: 'Sequence Diagrams' },
+					{ name: 'Use Case Diagrams', value: 'Use Case Diagrams' },
+					{ name: 'Activity Diagrams', value: 'Activity Diagrams' },
+					{ name: 'Component Diagrams', value: 'Component Diagrams' },
+					{ name: 'State Diagrams', value: 'State Diagrams' },
+					{ name: 'Object Diagrams', value: 'Object Diagrams' },
 				],
-				default: 'class',
+				default: 'Class Diagrams',
 				required: true,
 				description: 'Type of UML diagram to generate',
 			},
