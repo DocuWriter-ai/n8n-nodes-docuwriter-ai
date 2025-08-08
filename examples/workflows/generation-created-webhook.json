@@ -95,8 +95,7 @@
                 "operation": "generate",
                 "sourceCode": "={{$node['Generation Created'].json['data']['source']}}",
                 "filename": "={{$node['Generation Created'].json['data']['filename']}}",
-                "testFramework": "auto-detect",
-                "coverageLevel": "comprehensive"
+                "testFramework": "auto-detect"
             },
             "id": "generate-tests",
             "name": "Generate Tests",

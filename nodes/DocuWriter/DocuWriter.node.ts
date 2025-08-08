@@ -224,29 +224,6 @@ export class DocuWriter implements INodeType {
 				description: 'The filename for the source code',
 			},
 			{
-				displayName: 'Mode',
-				name: 'mode',
-				type: 'options',
-				displayOptions: {
-					show: {
-						resource: ['codeDocumentation'],
-						operation: ['generate'],
-					},
-				},
-				options: [
-					{
-						name: 'Faster',
-						value: 'Faster',
-					},
-					{
-						name: 'Accurate',
-						value: 'Accurate',
-					},
-				],
-				default: 'Faster',
-				description: 'Generation mode - Faster for quick results, Accurate for detailed analysis',
-			},
-			{
 				displayName: 'Output Language',
 				name: 'outputLanguage',
 				type: 'string',
@@ -345,33 +322,6 @@ export class DocuWriter implements INodeType {
 				},
 				default: 'unit tests',
 				description: 'Type of tests to generate',
-			},
-			{
-				displayName: 'Coverage Level',
-				name: 'coverageLevel',
-				type: 'options',
-				displayOptions: {
-					show: {
-						resource: ['codeTests'],
-						operation: ['generate'],
-					},
-				},
-				options: [
-					{
-						name: 'Basic',
-						value: 'basic',
-					},
-					{
-						name: 'Comprehensive',
-						value: 'comprehensive',
-					},
-					{
-						name: 'Full',
-						value: 'full',
-					},
-				],
-				default: 'comprehensive',
-				description: 'Level of test coverage to generate',
 			},
 
 			// Code Optimization Fields
@@ -478,7 +428,6 @@ export class DocuWriter implements INodeType {
 					if (operation === 'generate') {
 						const sourceCode = this.getNodeParameter('sourceCode', i) as string;
 						const filename = this.getNodeParameter('filename', i) as string;
-						const mode = this.getNodeParameter('mode', i) as string;
 						const outputLanguage = this.getNodeParameter('outputLanguage', i) as string;
 						const documentationType = this.getNodeParameter('documentationType', i) as string;
 
@@ -491,7 +440,6 @@ export class DocuWriter implements INodeType {
 								body: {
 									source_code: sourceCode,
 									filename,
-									mode,
 									output_language: outputLanguage,
 									documentation_type: documentationType,
 								},
@@ -505,7 +453,6 @@ export class DocuWriter implements INodeType {
 						const filename = this.getNodeParameter('filename', i) as string;
 						const testFramework = this.getNodeParameter('testFramework', i) as string;
 						const testType = this.getNodeParameter('testType', i) as string;
-						const coverageLevel = this.getNodeParameter('coverageLevel', i) as string;
 
 						responseData = await this.helpers.requestWithAuthentication.call(
 							this,
@@ -518,7 +465,6 @@ export class DocuWriter implements INodeType {
 									filename,
 									test_framework: testFramework,
 									test_type: testType,
-									coverage_level: coverageLevel,
 								},
 								json: true,
 							},

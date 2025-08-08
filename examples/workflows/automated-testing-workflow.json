@@ -49,8 +49,7 @@
         "sourceCode": "={{$json.source_code}}",
         "filename": "={{$json.filename}}",
         "testFramework": "auto-detect",
-        "testType": "unit tests",
-        "coverageLevel": "comprehensive"
+        "testType": "unit tests"
       },
       "id": "generate-tests",
       "name": "Generate Tests",
@@ -115,7 +114,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Combine all results into a comprehensive report\nconst originalFile = $node['Process File'].json;\nconst tests = $node['Generate Tests'].json;\nconst optimization = $node['Optimize Code'].json;\nconst uml = $node['Generate UML'].json;\n\nconst report = {\n  file_analysis: {\n    filename: originalFile.filename,\n    extension: originalFile.file_extension,\n    processed_at: new Date().toISOString()\n  },\n  test_generation: {\n    success: tests.success,\n    test_framework: tests.data?.test_framework,\n    coverage_level: tests.data?.coverage_level,\n    tests_content: tests.data?.tests\n  },\n  code_optimization: {\n    success: optimization.success,\n    optimization_focus: optimization.data?.optimization_focus,\n    optimized_code: optimization.data?.optimized_code,\n    changes_summary: optimization.data?.changes_summary\n  },\n  uml_diagram: {\n    success: uml.success,\n    diagram_type: uml.data?.diagram_type,\n    diagram_content: uml.data?.diagram\n  },\n  quality_score: calculateQualityScore(tests.success, optimization.success, uml.success)\n};\n\nfunction calculateQualityScore(testsSuccess, optimizationSuccess, umlSuccess) {\n  let score = 0;\n  if (testsSuccess) score += 40;\n  if (optimizationSuccess) score += 35;\n  if (umlSuccess) score += 25;\n  return score;\n}\n\nreturn report;"
+        "jsCode": "// Combine all results into a comprehensive report\nconst originalFile = $node['Process File'].json;\nconst tests = $node['Generate Tests'].json;\nconst optimization = $node['Optimize Code'].json;\nconst uml = $node['Generate UML'].json;\n\nconst report = {\n  file_analysis: {\n    filename: originalFile.filename,\n    extension: originalFile.file_extension,\n    processed_at: new Date().toISOString()\n  },\n  test_generation: {\n    success: tests.success,\n    test_framework: tests.data?.test_framework,\n    tests_content: tests.data?.tests\n  },\n  code_optimization: {\n    success: optimization.success,\n    optimization_focus: optimization.data?.optimization_focus,\n    optimized_code: optimization.data?.optimized_code,\n    changes_summary: optimization.data?.changes_summary\n  },\n  uml_diagram: {\n    success: uml.success,\n    diagram_type: uml.data?.diagram_type,\n    diagram_content: uml.data?.diagram\n  },\n  quality_score: calculateQualityScore(tests.success, optimization.success, uml.success)\n};\n\nfunction calculateQualityScore(testsSuccess, optimizationSuccess, umlSuccess) {\n  let score = 0;\n  if (testsSuccess) score += 40;\n  if (optimizationSuccess) score += 35;\n  if (umlSuccess) score += 25;\n  return score;\n}\n\nreturn report;"
       },
       "id": "create-report",
       "name": "Create Quality Report",

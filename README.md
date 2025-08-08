@@ -161,7 +161,7 @@ Generate comprehensive documentation from source code.
 **Parameters:**
 - `sourceCode` (required): The source code to analyze
 - `filename` (required): Filename for context
-- `mode`: Generation mode (Faster/Accurate)
+  (Mode is always Accurate)
 - `outputLanguage`: Language for documentation (default: English)
 - `documentationType`: Type of documentation to generate
 
@@ -173,7 +173,6 @@ Generate automated test suites.
 - `filename` (required): Filename for context
 - `testFramework`: Testing framework to use (auto-detect available)
 - `testType`: Type of tests (unit tests, etc.)
-- `coverageLevel`: Coverage level (basic/comprehensive/full)
 
 #### UML Diagram
 Create visual diagrams from code structure.
@@ -242,7 +241,7 @@ The DocuWriter.ai Trigger node allows you to create workflows that respond to ev
   "operation": "generate",
   "sourceCode": "function calculateTotal(items) {\n  return items.reduce((sum, item) => sum + item.price, 0);\n}",
   "filename": "calculator.js",
-  "mode": "Accurate"
+  
 }
 ```
 
@@ -254,8 +253,7 @@ The DocuWriter.ai Trigger node allows you to create workflows that respond to ev
   "operation": "generate",
   "sourceCode": "class User {\n  constructor(name) {\n    this.name = name;\n  }\n}",
   "filename": "User.js",
-  "testFramework": "auto-detect",
-  "coverageLevel": "comprehensive"
+  "testFramework": "auto-detect"
 }
 ```
 

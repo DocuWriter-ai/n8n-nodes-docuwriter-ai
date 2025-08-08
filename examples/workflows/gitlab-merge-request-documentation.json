@@ -173,8 +173,7 @@
                 "sourceCode": "={{$node['Prepare File Data'].json['sourceCode']}}",
                 "filename": "={{$node['Prepare File Data'].json['filename']}}",
                 "testFramework": "auto-detect",
-                "testType": "unit tests",
-                "coverageLevel": "comprehensive"
+                "testType": "unit tests"
             },
             "id": "generate-tests",
             "name": "Generate Tests",
